@@ -1,0 +1,8 @@
+/dataset
+*.json
+*.csv
+*examine*
+*__pycache__*
+*.vi
+*.en
+*.md
