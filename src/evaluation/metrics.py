@@ -1,1 +1,0 @@
-# BLEU, ROUGE, METEOR implementations
