@@ -9,3 +9,5 @@
 /venv
 /logs/*
 /results/*
+test_*.py
+*_test.py
