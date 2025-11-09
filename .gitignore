@@ -6,3 +6,6 @@
 *.vi
 *.en
 *.md
+/venv
+/logs/*
+/results/*

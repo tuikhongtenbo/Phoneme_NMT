@@ -6,9 +6,9 @@ import torch
 from collections import Counter
 
 # Import utilities and Vocab class from src.utils/
-from ..utils.util import preprocess_sentence
-from ..utils.viword_vocab import ViWordVocab # Phoneme/Syllable-level Vocab
-from ..utils.Vietnamese_util import analyze_Vietnamese 
+from .vocabs.utils import preprocess_sentence
+from .vocabs.viword_vocab import ViWordVocab # Phoneme/Syllable-level Vocab
+from .vocabs.Vietnamese_utils import analyze_Vietnamese
 
 # Define Special Tokens and IDs for consistency
 PAD_TOKEN, SOS_TOKEN, EOS_TOKEN, UNK_TOKEN = '<PAD>', '<SOS>', '<EOS>', '<UNK>'
@@ -101,6 +101,11 @@ class ViWordLevelVocab(BaseVocab):
     def __init__(self, config):
         super().__init__('vi_word')
         # self.config = config # You might need config for other settings
+    
+    @property
+    def vocab_size(self):
+        """Return vocabulary size for compatibility with ViWordVocab interface."""
+        return self.count
         
     def encode_caption(self, words: List[str]) -> List[int]:
         """Converts list of Vietnamese words to list of Word IDs (1D vector)."""
@@ -113,20 +118,104 @@ class ViWordLevelVocab(BaseVocab):
         indices.append(self.eos_idx)
         return indices
 
+
+def create_vi_vocab_config(pydantic_config: Any, json_paths: Optional[Dict[str, str]] = None) -> Any:
+    """
+    Create a config object compatible with ViWordVocab from Pydantic Config.
+    
+    Args:
+        pydantic_config: Config object from configs.config.Config
+        json_paths: Optional dict with 'train', 'dev', 'test' JSON paths
+        
+    Returns:
+        Config-like object with TOKENIZER, PAD_TOKEN, BOS_TOKEN, EOS_TOKEN, UNK_TOKEN, JSON_PATH
+    """
+    class ViVocabConfig:
+        def __init__(self, pydantic_config, json_paths):
+            # Tokenizer type
+            self.TOKENIZER = "word"
+            
+            # Special tokens - use constants from preprocessing
+            self.PAD_TOKEN = PAD_TOKEN
+            self.BOS_TOKEN = SOS_TOKEN
+            self.EOS_TOKEN = EOS_TOKEN
+            self.UNK_TOKEN = UNK_TOKEN
+            
+            # JSON paths for vocabulary building
+            if json_paths is None:
+                # Try to get from config if available
+                if hasattr(pydantic_config, 'data') and hasattr(pydantic_config.data, 'json_paths'):
+                    json_paths = pydantic_config.data.json_paths
+                else:
+                    json_paths = {}
+            
+            # Handle both dict and string cases
+            # Pydantic might return a dict-like object, convert to regular dict if needed
+            if json_paths is None:
+                json_paths = {}
+            
+            # Convert to regular dict if it's a Pydantic model or similar
+            if hasattr(json_paths, 'model_dump'):
+                # Pydantic v2
+                json_paths_dict = json_paths.model_dump()
+            elif hasattr(json_paths, 'dict'):
+                # Pydantic v1
+                json_paths_dict = json_paths.dict()
+            elif isinstance(json_paths, dict):
+                json_paths_dict = dict(json_paths)
+            else:
+                # Not a dict, use defaults
+                json_paths_dict = {}
+            
+            train_path = json_paths_dict.get('train', 'dataset/vocabs/full_vocab_ipa.json')
+            dev_path = json_paths_dict.get('dev', 'dataset/vocabs/full_vocab_ipa.json')
+            test_path = json_paths_dict.get('test', 'dataset/vocabs/full_vocab_ipa.json')
+            
+            # Create JSON_PATH object
+            self.JSON_PATH = type('JSON_PATH', (), {
+                'TRAIN': train_path,
+                'DEV': dev_path,
+                'TEST': test_path
+            })()
+    
+    return ViVocabConfig(pydantic_config, json_paths)
+
 # --- MAIN DATA LOADING FUNCTIONS ---
 
 def load_pairs(data_root: str, split: str) -> List[Tuple[str, str]]:
-    """Loads raw sentence pairs."""
-    # (Hàm load_pairs giữ nguyên)
-    base_path = os.path.join(data_root, 'tokenization', split)
-    en_path = os.path.join(base_path, f'{split}.en')
-    vi_path = os.path.join(base_path, f'{split}.vi')
+    """
+    Loads raw sentence pairs.
+    Tries multiple path patterns:
+    1. dataset/vocabs/clean/{split}_end.en and {split}_end.vi
+    2. dataset/tokenization/{split}/{split}.en and {split}.vi
+    """
+    # Try new path format: dataset/vocabs/clean/{split}_end.en
+    base_path_new = os.path.join(data_root, 'vocabs', 'clean')
+    en_path_new = os.path.join(base_path_new, f'{split}_end.en')
+    vi_path_new = os.path.join(base_path_new, f'{split}_end.vi')
     
-    if not os.path.exists(en_path) or not os.path.exists(vi_path):
-        print(f"⚠️ WARNING: Files not found at: {base_path}. Skipping.")
+    # Try old path format: dataset/tokenization/{split}/{split}.en
+    base_path_old = os.path.join(data_root, 'tokenization', split)
+    en_path_old = os.path.join(base_path_old, f'{split}.en')
+    vi_path_old = os.path.join(base_path_old, f'{split}.vi')
+    
+    # Try new format first
+    if os.path.exists(en_path_new) and os.path.exists(vi_path_new):
+        en_path = en_path_new
+        vi_path = vi_path_new
+        base_path = base_path_new
+        print(f"Loading {split} data from: {base_path} (format: {split}_end.*)...")
+    # Fallback to old format
+    elif os.path.exists(en_path_old) and os.path.exists(vi_path_old):
+        en_path = en_path_old
+        vi_path = vi_path_old
+        base_path = base_path_old
+        print(f"Loading {split} data from: {base_path} (format: {split}.*)...")
+    else:
+        print(f"⚠️ WARNING: Files not found for {split} split.")
+        print(f"   Tried: {en_path_new} and {vi_path_new}")
+        print(f"   Tried: {en_path_old} and {vi_path_old}")
         return []
-
-    print(f"Loading {split} data from: {base_path}...")
     
     with open(en_path, 'r', encoding='utf-8') as f:
         en_lines = [line.strip() for line in f if line.strip()]
@@ -137,6 +226,7 @@ def load_pairs(data_root: str, split: str) -> List[Tuple[str, str]]:
     if len(en_lines) != len(vi_lines):
         raise ValueError(f"Sentence count mismatch between {en_path} and {vi_path}: {len(en_lines)} vs {len(vi_lines)}")
 
+    print(f"✓ Loaded {len(en_lines)} sentence pairs from {split} split")
     return list(zip(en_lines, vi_lines))
 
 
@@ -162,7 +252,10 @@ def prepare_data(data_root: str, splits: List[str], max_len: int, min_count: int
     print(f"Input Vocab Size (EN Word): {input_vocab.count}")
     
     # 3. Initialize Vietnamese Vocab (Target - level depends on config)
-    target_level = getattr(config, 'target_level', 'phoneme').lower() # Default to 'phoneme'
+    if config is not None and hasattr(config, 'data') and hasattr(config.data, 'target_level'):
+        target_level = config.data.target_level.lower()
+    else:
+        target_level = 'phoneme'  # Default to 'phoneme'
     print(f"Target (VI) tokenization level set to: **{target_level}**")
 
     if target_level == 'word':
@@ -175,8 +268,10 @@ def prepare_data(data_root: str, splits: List[str], max_len: int, min_count: int
     
     elif target_level == 'phoneme':
         try:
+            # Create config compatible with ViWordVocab
+            vi_vocab_config = create_vi_vocab_config(config, getattr(config.data, 'json_paths', None) if config else None)
             # ViWordVocab handles its own vocab building (e.g., from JSON)
-            output_vocab = ViWordVocab(config)
+            output_vocab = ViWordVocab(vi_vocab_config)
             print(f"Output Vocab Size (VI Phonemes): {output_vocab.vocab_size}")
         except Exception as e:
             print(f"❌ ERROR: Could not initialize ViWordVocab. Falling back to Word-level.")
