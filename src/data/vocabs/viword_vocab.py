@@ -29,6 +29,11 @@ class ViWordVocab:
         # only padding token is not allowed to be shown
         self.specials = [self.padding_token]
 
+    @property
+    def vocab_size(self):
+        """Return vocabulary size for compatibility with other vocab interfaces."""
+        return len(self.itos)
+
     def initialize_special_tokens(self, config) -> None:
         self.padding_token = config.PAD_TOKEN
         self.bos_token = config.BOS_TOKEN
@@ -55,7 +60,15 @@ class ViWordVocab:
 
             for key in data:
                 item = data[key]
-                caption = item["caption"]
+                # Handle both formats: {"key": {"caption": "..."}} and {"key": "..."}
+                if isinstance(item, dict) and "caption" in item:
+                    caption = item["caption"]
+                elif isinstance(item, str):
+                    caption = item
+                else:
+                    # Skip if item is neither a dict with caption nor a string
+                    continue
+                    
                 words = preprocess_sentence(caption)
                 for word in words:
                     components = analyze_Vietnamese(word)
@@ -134,6 +147,7 @@ class ViWordVocab:
             self.decode_caption(caption_vec, join_words) for caption_vec in caption_batch
         ]
 
+<<<<<<< feature/log
         return captions
 
 
@@ -222,3 +236,6 @@ if __name__ == "__main__":
         print("   This is expected if running without full dataset setup.")
     
     print("\n" + "=" * 60)
+=======
+        return captions
+>>>>>>> local

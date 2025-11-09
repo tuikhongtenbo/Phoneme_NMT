@@ -1,1 +1,48 @@
 # Transformer configuration
+
+model:
+  name: "transformer"
+  embed_dim: 512
+  hidden_dim: 512  
+  num_layers: 6
+  dropout: 0.1
+  attention_type: null 
+  num_heads: 8
+  ff_dim: 2048
+
+training:
+  batch_size: 32
+  num_epochs: 50
+  learning_rate: 0.001
+  optimizer: "adamw"
+  scheduler: "cosine"
+  clip_grad_norm: 5.0
+  warmup_steps: 4000 
+  eval_every: 1000
+  save_every: 5000
+
+data:
+  # Special token IDs
+  sos_id: 1
+  eos_id: 2
+  pad_id: 0
+  unk_id: 3
+  
+  # Data directory
+  data_root: "dataset"
+  
+  # Target level: 'word' or 'phoneme'
+  target_level: "phoneme"
+  
+  # JSON paths for phoneme vocabulary (if target_level='phoneme')
+  json_paths:
+    train: "dataset/vocabs/full_vocab_ipa.json"
+    dev: "dataset/vocabs/full_vocab_ipa.json"
+    test: "dataset/vocabs/full_vocab_ipa.json"
+  
+  # Vocabulary settings
+  min_count: 3
+  max_seq_len: 100
+
+device: "cuda"
+seed: 42
