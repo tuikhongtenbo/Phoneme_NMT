@@ -28,17 +28,25 @@ data:
   pad_id: 0
   unk_id: 3
   
-  # Data directory
-  data_root: "dataset"
-  
   # Target level: 'word' or 'phoneme'
   target_level: "phoneme"
   
-  # JSON paths for phoneme vocabulary (if target_level='phoneme')
-  json_paths:
-    train: "dataset/vocabs/full_vocab_ipa.json"
-    dev: "dataset/vocabs/full_vocab_ipa.json"
-    test: "dataset/vocabs/full_vocab_ipa.json"
+  # Direct paths to training data files
+  train_src: "dataset/vocabs/clean/train_end.en"
+  train_tgt: "dataset/vocabs/clean/train_end.vi"
+  
+  # Direct paths to dev data files
+  dev_src: "dataset/vocabs/clean/dev_end.en"
+  dev_tgt: "dataset/vocabs/clean/dev_end.vi"
+  
+  # Direct paths to test data files
+  test_src: "dataset/vocabs/clean/test_end.en"
+  test_tgt: "dataset/vocabs/clean/test_end.vi"
+  
+  # Direct paths to vocabulary JSON files (for phoneme-level)
+  vocab_json_train: "dataset/vocabs/full_vocab_ipa.json"
+  vocab_json_dev: "dataset/vocabs/full_vocab_ipa.json"
+  vocab_json_test: "dataset/vocabs/full_vocab_ipa.json"
   
   # Vocabulary settings
   min_count: 3

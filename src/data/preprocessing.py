@@ -141,35 +141,16 @@ def create_vi_vocab_config(pydantic_config: Any, json_paths: Optional[Dict[str, 
             self.EOS_TOKEN = EOS_TOKEN
             self.UNK_TOKEN = UNK_TOKEN
             
-            # JSON paths for vocabulary building
-            if json_paths is None:
-                # Try to get from config if available
-                if hasattr(pydantic_config, 'data') and hasattr(pydantic_config.data, 'json_paths'):
-                    json_paths = pydantic_config.data.json_paths
-                else:
-                    json_paths = {}
-            
-            # Handle both dict and string cases
-            # Pydantic might return a dict-like object, convert to regular dict if needed
-            if json_paths is None:
-                json_paths = {}
-            
-            # Convert to regular dict if it's a Pydantic model or similar
-            if hasattr(json_paths, 'model_dump'):
-                # Pydantic v2
-                json_paths_dict = json_paths.model_dump()
-            elif hasattr(json_paths, 'dict'):
-                # Pydantic v1
-                json_paths_dict = json_paths.dict()
-            elif isinstance(json_paths, dict):
-                json_paths_dict = dict(json_paths)
+            # Get vocab paths directly from config
+            if hasattr(pydantic_config, 'data'):
+                train_path = getattr(pydantic_config.data, 'vocab_json_train', 'dataset/vocabs/full_vocab_ipa.json')
+                dev_path = getattr(pydantic_config.data, 'vocab_json_dev', 'dataset/vocabs/full_vocab_ipa.json')
+                test_path = getattr(pydantic_config.data, 'vocab_json_test', 'dataset/vocabs/full_vocab_ipa.json')
             else:
-                # Not a dict, use defaults
-                json_paths_dict = {}
-            
-            train_path = json_paths_dict.get('train', 'dataset/vocabs/full_vocab_ipa.json')
-            dev_path = json_paths_dict.get('dev', 'dataset/vocabs/full_vocab_ipa.json')
-            test_path = json_paths_dict.get('test', 'dataset/vocabs/full_vocab_ipa.json')
+                # Fallback to default paths
+                train_path = 'dataset/vocabs/full_vocab_ipa.json'
+                dev_path = 'dataset/vocabs/full_vocab_ipa.json'
+                test_path = 'dataset/vocabs/full_vocab_ipa.json'
             
             # Create JSON_PATH object
             self.JSON_PATH = type('JSON_PATH', (), {
@@ -182,41 +163,47 @@ def create_vi_vocab_config(pydantic_config: Any, json_paths: Optional[Dict[str, 
 
 # --- MAIN DATA LOADING FUNCTIONS ---
 
-def load_pairs(data_root: str, split: str) -> List[Tuple[str, str]]:
+def load_pairs(split: str, config: Any) -> List[Tuple[str, str]]:
     """
-    Loads raw sentence pairs.
-    Tries multiple path patterns:
-    1. dataset/vocabs/clean/{split}_end.en and {split}_end.vi
-    2. dataset/tokenization/{split}/{split}.en and {split}.vi
+    Loads raw sentence pairs using direct paths from config.
+    
+    Args:
+        split: Data split name ('train', 'dev', or 'test')
+        config: Config object with data paths
+        
+    Returns:
+        List of (source, target) sentence pairs
     """
-    # Try new path format: dataset/vocabs/clean/{split}_end.en
-    base_path_new = os.path.join(data_root, 'vocabs', 'clean')
-    en_path_new = os.path.join(base_path_new, f'{split}_end.en')
-    vi_path_new = os.path.join(base_path_new, f'{split}_end.vi')
+    # Get direct paths from config
+    if not config or not hasattr(config, 'data'):
+        raise ValueError("Config object with data paths is required")
     
-    # Try old path format: dataset/tokenization/{split}/{split}.en
-    base_path_old = os.path.join(data_root, 'tokenization', split)
-    en_path_old = os.path.join(base_path_old, f'{split}.en')
-    vi_path_old = os.path.join(base_path_old, f'{split}.vi')
+    data_config = config.data
     
-    # Try new format first
-    if os.path.exists(en_path_new) and os.path.exists(vi_path_new):
-        en_path = en_path_new
-        vi_path = vi_path_new
-        base_path = base_path_new
-        print(f"Loading {split} data from: {base_path} (format: {split}_end.*)...")
-    # Fallback to old format
-    elif os.path.exists(en_path_old) and os.path.exists(vi_path_old):
-        en_path = en_path_old
-        vi_path = vi_path_old
-        base_path = base_path_old
-        print(f"Loading {split} data from: {base_path} (format: {split}.*)...")
+    # Determine which paths to use based on split
+    if split == 'train':
+        en_path = data_config.train_src
+        vi_path = data_config.train_tgt
+    elif split == 'dev':
+        en_path = data_config.dev_src
+        vi_path = data_config.dev_tgt
+    elif split == 'test':
+        en_path = data_config.test_src
+        vi_path = data_config.test_tgt
     else:
-        print(f"⚠️ WARNING: Files not found for {split} split.")
-        print(f"   Tried: {en_path_new} and {vi_path_new}")
-        print(f"   Tried: {en_path_old} and {vi_path_old}")
-        return []
+        raise ValueError(f"Unknown split: {split}. Must be 'train', 'dev', or 'test'")
     
+    # Check if files exist
+    if not os.path.exists(en_path):
+        raise FileNotFoundError(f"Source file not found: {en_path}")
+    if not os.path.exists(vi_path):
+        raise FileNotFoundError(f"Target file not found: {vi_path}")
+    
+    print(f"Loading {split} data:")
+    print(f"  Source: {en_path}")
+    print(f"  Target: {vi_path}")
+    
+    # Load data
     with open(en_path, 'r', encoding='utf-8') as f:
         en_lines = [line.strip() for line in f if line.strip()]
     
@@ -230,7 +217,7 @@ def load_pairs(data_root: str, split: str) -> List[Tuple[str, str]]:
     return list(zip(en_lines, vi_lines))
 
 
-def prepare_data(data_root: str, splits: List[str], max_len: int, min_count: int = 3, config: Any = None) -> Dict[str, Any]:
+def prepare_data(splits: List[str], max_len: int, min_count: int = 3, config: Any = None) -> Dict[str, Any]:
     """
     Loads raw data, builds vocabularies, converts sentences to indices, and filters.
     The tokenization level for Target (VI) is selected via config.target_level.
@@ -239,7 +226,7 @@ def prepare_data(data_root: str, splits: List[str], max_len: int, min_count: int
     # 1. Load all raw data
     all_raw_pairs = {}
     for split in splits:
-        all_raw_pairs[split] = load_pairs(data_root, split)
+        all_raw_pairs[split] = load_pairs(split, config)
 
     if 'train' not in all_raw_pairs:
         raise ValueError("Missing 'train' split required for vocabulary building.")
@@ -269,7 +256,7 @@ def prepare_data(data_root: str, splits: List[str], max_len: int, min_count: int
     elif target_level == 'phoneme':
         try:
             # Create config compatible with ViWordVocab
-            vi_vocab_config = create_vi_vocab_config(config, getattr(config.data, 'json_paths', None) if config else None)
+            vi_vocab_config = create_vi_vocab_config(config, None)
             # ViWordVocab handles its own vocab building (e.g., from JSON)
             output_vocab = ViWordVocab(vi_vocab_config)
             print(f"Output Vocab Size (VI Phonemes): {output_vocab.vocab_size}")
