@@ -54,30 +54,28 @@ class DataConfig(BaseModel):
     pad_id: int = Field(0, description="Padding token ID")
     unk_id: int = Field(3, description="Unknown token ID")
     
-    # Data root directory
-    data_root: str = Field("dataset", description="Root directory containing data files")
-    
     # Target level: 'word' or 'phoneme'
     target_level: Literal["word", "phoneme"] = Field("phoneme", description="Target sequence level: word or phoneme")
     
-    # Paths for phoneme vocabulary (if target_level='phoneme')
-    json_paths: Optional[Dict[str, str]] = Field(
-        None,
-        description="JSON paths for phoneme vocabulary."
-    )
+    # Direct paths to training data files
+    train_src: str = Field(..., description="Direct path to training source data file (.en)")
+    train_tgt: str = Field(..., description="Direct path to training target data file (.vi)")
     
-    # Minimum word count for vocabulary building
+    # Direct paths to dev data files
+    dev_src: str = Field(..., description="Direct path to dev source data file (.en)")
+    dev_tgt: str = Field(..., description="Direct path to dev target data file (.vi)")
+    
+    # Direct paths to test data files
+    test_src: str = Field(..., description="Direct path to test source data file (.en)")
+    test_tgt: str = Field(..., description="Direct path to test target data file (.vi)")
+    
+    # Direct paths to vocabulary JSON files (for phoneme-level)
+    vocab_json_train: str = Field(..., description="Direct path to training vocabulary JSON file")
+    vocab_json_dev: str = Field(..., description="Direct path to dev vocabulary JSON file")
+    vocab_json_test: str = Field(..., description="Direct path to test vocabulary JSON file")
+    
+    # Vocabulary and sequence settings
     min_count: int = Field(3, ge=1, description="Minimum word count for vocabulary")
-    
-    # Legacy paths (optional, for backward compatibility)
-    train_src: Optional[str] = Field(None, description="Training source data path")
-    train_tgt: Optional[str] = Field(None, description="Training target data path")
-    dev_src: Optional[str] = Field(None, description="Development source data path")
-    dev_tgt: Optional[str] = Field(None, description="Development target data path")
-    test_src: Optional[str] = Field(None, description="Test source data path")
-    test_tgt: Optional[str] = Field(None, description="Test target data path")
-    
-    vocab_path: Optional[str] = Field(None, description="Vocabulary file path")
     max_seq_len: int = Field(100, gt=0, description="Maximum sequence length")
 
 
