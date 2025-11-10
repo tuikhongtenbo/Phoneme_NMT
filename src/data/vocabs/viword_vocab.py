@@ -147,7 +147,6 @@ class ViWordVocab:
             self.decode_caption(caption_vec, join_words) for caption_vec in caption_batch
         ]
 
-<<<<<<< feature/log
         return captions
 
 
@@ -236,6 +235,3 @@ if __name__ == "__main__":
         print("   This is expected if running without full dataset setup.")
     
     print("\n" + "=" * 60)
-=======
-        return captions
->>>>>>> local
