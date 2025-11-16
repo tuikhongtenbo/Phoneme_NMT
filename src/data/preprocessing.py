@@ -122,12 +122,54 @@ class EnPhonemeVocab:
     
     def __init__(self, config):
         self.initialize_special_tokens()
+        
+        # Load English word -> IPA mapping 
+        self.word_to_ipa = self.load_ipa_mapping(config)
+        
         phonemes = self.make_vocab(config)
         phonemes = sorted(list(phonemes))
         
         self.itos = {i: tok for i, tok in enumerate(self.specials + phonemes)}
         self.stoi = {tok: i for i, tok in enumerate(self.specials + phonemes)}
         self.specials = [self.padding_token]
+    
+    def load_ipa_mapping(self, config) -> Dict[str, str]:
+        """Load English word -> IPA mapping from JSON file specified in config."""
+        import json
+        
+        # Get JSON path from config
+        json_path = None
+        if hasattr(config, 'data'):
+            json_path = getattr(config.data, 'vocab_json_train', None)
+        
+        if not json_path or not os.path.exists(json_path):
+            # Try default paths
+            default_paths = [
+                'dataset/vocabs/clean/full_vocab.json'
+            ]
+            for path in default_paths:
+                if os.path.exists(path):
+                    json_path = path
+                    break
+        
+        if not json_path or not os.path.exists(json_path):
+            raise FileNotFoundError(
+                f"English IPA vocabulary JSON file not found. "
+                f"Please set vocab_json_train in config or place file at full_vocab.json"
+            )
+        
+        with open(json_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        # Convert to word -> IPA mapping
+        word_to_ipa = {}
+        for key, value in data.items():
+            if isinstance(value, str):
+                word_to_ipa[key.lower()] = value
+            elif isinstance(value, dict) and 'caption' in value:
+                word_to_ipa[key.lower()] = value['caption']
+        
+        return word_to_ipa
     
     @property
     def vocab_size(self):
@@ -148,49 +190,68 @@ class EnPhonemeVocab:
         self.unk_idx = 3
     
     def make_vocab(self, config) -> set:
-        """Build phoneme vocabulary from training data."""
-        
+        """Build phoneme vocabulary from IPA mappings in JSON file."""
         phonemes = set()
         
         # Add all possible English phonemes
         phonemes.update(EnglishIPA.Vowels)
         phonemes.update(EnglishIPA.Consonants)
         
-        # Collect additional phonemes from training data if available
-        if hasattr(config, 'data') and hasattr(config.data, 'train_src'):
-            train_path = config.data.train_src
-            if os.path.exists(train_path):
-                with open(train_path, 'r', encoding='utf-8') as f:
-                    for line in f:
-                        line = line.strip()
-                        if line:
-                            # Assume line is IPA or can be converted
-                            # For now, just collect from existing phonemes
-                            # Can be extended to parse IPA from data
-                            pass
+        # Collect phonemes from IPA mappings in JSON file
+        if hasattr(self, 'word_to_ipa'):
+            for ipa_str in self.word_to_ipa.values():
+                try:
+                    phoneme_seqs = convert_English_IPA_to_phoneme(ipa_str)
+                    for phoneme_seq in phoneme_seqs:
+                        if isinstance(phoneme_seq, list):
+                            # phoneme_seq is [initial, vowel, final]
+                            for phoneme in phoneme_seq:
+                                if phoneme:
+                                    phonemes.add(phoneme)
+                        else:
+                            if phoneme_seq:
+                                phonemes.add(phoneme_seq)
+                except:
+                    pass  # Skip invalid IPA
         
         return phonemes
     
     def encode_caption(self, sentence: str) -> List[List[int]]:
-        """Convert English sentence to phoneme indices."""
-        # Assume sentence is in IPA format
-        try:
-            phoneme_seqs = convert_English_IPA_to_phoneme(sentence)
-        except:
-            # If conversion fails, treat as word-level and use UNK
-            phoneme_seqs = []
+        """
+        Convert English sentence to phoneme indices.
         
+        Process: English words -> lookup IPA from JSON (via config) -> convert IPA to phonemes -> encode to indices
+        """
+        from .vocabs.utils import preprocess_sentence
+        
+        words = preprocess_sentence(sentence)
         encoded = [[self.bos_idx]]
-        for phoneme_seq in phoneme_seqs:
-            if isinstance(phoneme_seq, list):
-                # phoneme_seq is [initial, vowel, final]
-                for phoneme in phoneme_seq:
-                    if phoneme:
-                        encoded.append([self.stoi.get(phoneme, self.unk_idx)])
-            else:
-                encoded.append([self.stoi.get(phoneme_seq, self.unk_idx)])
-        encoded.append([self.eos_idx])
         
+        for word in words:
+            # Lookup IPA from JSON mapping
+            ipa_str = self.word_to_ipa.get(word.lower(), None)
+            
+            if ipa_str:
+                try:
+                    # Convert IPA string to phonemes
+                    phoneme_seqs = convert_English_IPA_to_phoneme(ipa_str)
+                    for phoneme_seq in phoneme_seqs:
+                        if isinstance(phoneme_seq, list):
+                            # phoneme_seq is [initial, vowel, final]
+                            for phoneme in phoneme_seq:
+                                if phoneme:
+                                    encoded.append([self.stoi.get(phoneme, self.unk_idx)])
+                        else:
+                            if phoneme_seq:
+                                encoded.append([self.stoi.get(phoneme_seq, self.unk_idx)])
+                except:
+                    # If IPA conversion fails, use UNK
+                    encoded.append([self.unk_idx])
+            else:
+                # Word not found in mapping, use UNK
+                encoded.append([self.unk_idx])
+        
+        encoded.append([self.eos_idx])
         return encoded
     
     def sentence_to_indices(self, sentence: str) -> List[int]:
