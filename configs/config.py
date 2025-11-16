@@ -70,10 +70,10 @@ class DataConfig(BaseModel):
     test_src: str = Field(..., description="Direct path to test source data file (.en)")
     test_tgt: str = Field(..., description="Direct path to test target data file (.vi)")
     
-    # Direct paths to vocabulary JSON files (for phoneme-level)
-    vocab_json_train: str = Field(..., description="Direct path to training vocabulary JSON file")
-    vocab_json_dev: str = Field(..., description="Direct path to dev vocabulary JSON file")
-    vocab_json_test: str = Field(..., description="Direct path to test vocabulary JSON file")
+    # Direct paths to English IPA vocabulary JSON files (for English phoneme-level source)
+    vocab_json_train: Optional[str] = Field(None, description="Direct path to English IPA vocabulary JSON file (for EN phoneme-level)")
+    vocab_json_dev: Optional[str] = Field(None, description="Direct path to English IPA vocabulary JSON file (for EN phoneme-level)")
+    vocab_json_test: Optional[str] = Field(None, description="Direct path to English IPA vocabulary JSON file (for EN phoneme-level)")
     
     # Vocabulary and sequence settings
     min_count: int = Field(3, ge=1, description="Minimum word count for vocabulary")

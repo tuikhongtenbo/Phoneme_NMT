@@ -211,20 +211,9 @@ def create_vi_vocab_config(pydantic_config: Any) -> Any:
             self.EOS_TOKEN = EOS_TOKEN
             self.UNK_TOKEN = UNK_TOKEN
             
-            if hasattr(pydantic_config, 'data'):
-                train_path = getattr(pydantic_config.data, 'vocab_json_train', 'dataset/vocabs/full_vocab_ipa.json')
-                dev_path = getattr(pydantic_config.data, 'vocab_json_dev', 'dataset/vocabs/full_vocab_ipa.json')
-                test_path = getattr(pydantic_config.data, 'vocab_json_test', 'dataset/vocabs/full_vocab_ipa.json')
-            else:
-                train_path = 'dataset/vocabs/clean/full_vocab.json'
-                dev_path = 'dataset/vocabs/clean/full_vocab.json'
-                test_path = 'dataset/vocabs/clean/full_vocab.json'
-            
-            self.JSON_PATH = type('JSON_PATH', (), {
-                'TRAIN': train_path,
-                'DEV': dev_path,
-                'TEST': test_path
-            })()
+            # Pass the full config so ViWordVocab can access Vietnamese text file paths
+            # Vietnamese phonemes are extracted from train_tgt, dev_tgt, test_tgt files
+            self.data = pydantic_config.data if hasattr(pydantic_config, 'data') else None
     
     return ViVocabConfig(pydantic_config)
 

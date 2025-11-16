@@ -44,28 +44,32 @@ class ViWordVocab:
         self.unk_idx = 3
 
     def make_vocab(self, config):
-        json_paths = [config.TRAIN, config.DEV, config.TEST]
+        """Build Vietnamese phoneme vocabulary from training data files."""
+        if not hasattr(config, 'data') or not hasattr(config.data, 'train_tgt'):
+            raise ValueError("Config must have data.train_tgt path for Vietnamese text")
+        
+        vi_text_paths = []
+        if hasattr(config.data, 'train_tgt'):
+            vi_text_paths.append(config.data.train_tgt)
+        if hasattr(config.data, 'dev_tgt'):
+            vi_text_paths.append(config.data.dev_tgt)
+        if hasattr(config.data, 'test_tgt'):
+            vi_text_paths.append(config.data.test_tgt)
+        
         phonemes = set()
-
-        # Collect token stats from each JSON
-        for path in json_paths:
+        
+        # Collect phonemes from Vietnamese text files
+        for path in vi_text_paths:
             if not os.path.exists(path):
-                raise FileNotFoundError(f"JSON path not found: {path}")
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-
-            for key in data:
-                item = data[key]
-                # Handle both formats: {"key": {"caption": "..."}} and {"key": "..."}
-                if isinstance(item, dict) and "caption" in item:
-                    caption = item["caption"]
-                elif isinstance(item, str):
-                    caption = item
-                else:
-                    # Skip if item is neither a dict with caption nor a string
-                    continue
+                continue  
+                
+            with open(path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
                     
-                words = preprocess_sentence(caption)
+                words = preprocess_sentence(line)
                 for word in words:
                     components = analyze_Vietnamese(word)
                     if components:
