@@ -18,7 +18,7 @@ def setup_environment():
     print("=" * 80)
     
     # Option 1: Clone từ GitHub
-    repo_url = os.environ.get("GITHUB_REPO", "https://github.com/YOUR_USERNAME/YOUR_REPO.git")
+    repo_url = os.environ.get("GITHUB_REPO", "https://github.com/tuikhongtenbo/Phoneme_NMT.git")
     repo_dir = WORK_DIR / "Phoneme_NMT"
     
     if not repo_dir.exists():
@@ -104,17 +104,17 @@ def update_config_for_kaggle():
     """Update config paths for Kaggle environment."""
     print("\n⚙️  Updating config for Kaggle...")
     
-    # Paths sẽ được update trong train_custom_samples.py
-    # Nếu cần update paths cho full dataset:
-    kaggle_data_path = Path("/kaggle/input")
-    dataset_dirs = list(kaggle_data_path.glob("*"))
+    # Paths đã được update trong các file yaml (trỏ đến /kaggle/input/phomt/)
+    # Chỉ cần kiểm tra xem dataset có tồn tại không
+    kaggle_data_path = Path("/kaggle/input/phomt")
     
-    if dataset_dirs:
-        data_dir = dataset_dirs[0]
-        print(f"   Found dataset at: {data_dir}")
-        return data_dir
-    
-    return None
+    if kaggle_data_path.exists():
+        print(f"   ✓ Found dataset at: {kaggle_data_path}")
+        return kaggle_data_path
+    else:
+        print(f"   ⚠️  Dataset not found at {kaggle_data_path}")
+        print("   Please ensure dataset 'phomt' is added to Kaggle Notebook")
+        return None
 
 
 def main():
@@ -130,13 +130,25 @@ def main():
     print("=" * 80)
     
     # Import và chạy training
+    # Sử dụng main.py với config file
+    # Parse arguments (có thể set trong Kaggle notebook)
+    config_file = os.environ.get("CONFIG_FILE", "configs/lstm_luong.yaml")
+    
+    print(f"\n📋 Using config: {config_file}")
+    print("   (Set CONFIG_FILE environment variable to change)")
+    
+    # Import main và chạy với config
+    from main import main as train_main
+    import sys
+    
+    # Set sys.argv để main.py nhận được config
+    original_argv = sys.argv
+    sys.argv = ["main.py", "--config", config_file]
+    
     try:
-        from train_custom_samples import main as train_main
         train_main()
-    except ImportError:
-        print("⚠️  train_custom_samples.py not found, trying main.py...")
-        from main import main as train_main
-        train_main()
+    finally:
+        sys.argv = original_argv
     
     print("\n" + "=" * 80)
     print("Training Complete!")
