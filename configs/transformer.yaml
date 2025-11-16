@@ -11,7 +11,7 @@ model:
   ff_dim: 2048
 
 training:
-  batch_size: 32
+  batch_size: 128
   num_epochs: 50
   learning_rate: 0.001
   optimizer: "adamw"
@@ -44,9 +44,9 @@ data:
   test_tgt: "/kaggle/input/phomt/test_end_clean.vi"
   
   # Direct paths to vocabulary JSON files (for phoneme-level)
-  vocab_json_train: "/kaggle/input/phomt/full_vocab_ipa.json"
-  vocab_json_dev: "/kaggle/input/phomt/full_vocab_ipa.json"
-  vocab_json_test: "/kaggle/input/phomt/full_vocab_ipa.json"
+  vocab_json_train: "/kaggle/input/phomt/full_vocab.json"
+  vocab_json_dev: "/kaggle/input/phomt/full_vocab.json"
+  vocab_json_test: "/kaggle/input/phomt/full_vocab.json"
   
   # Vocabulary settings
   min_count: 3
