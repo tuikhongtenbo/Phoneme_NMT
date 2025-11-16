@@ -69,11 +69,11 @@ class ViWordVocab:
                     if not line:
                         continue
                     
-                words = preprocess_sentence(line)
-                for word in words:
-                    components = analyze_Vietnamese(word)
-                    if components:
-                        phonemes.update([phoneme for phoneme in components if phoneme])
+                    words = preprocess_sentence(line)
+                    for word in words:
+                        components = analyze_Vietnamese(word)
+                        if components:
+                            phonemes.update([phoneme for phoneme in components if phoneme])
 
         return phonemes
 
@@ -85,7 +85,8 @@ class ViWordVocab:
             components = analyze_Vietnamese(word)
             if components:
                 syllables.append([
-                    self.stoi[phoneme] if phoneme else self.padding_idx for phoneme in components
+                    self.stoi.get(phoneme, self.unk_idx) if phoneme else self.padding_idx 
+                    for phoneme in components
                 ])
             else:
                 syllables.append(
