@@ -70,7 +70,7 @@ class Evaluator:
                     gamma=metric_kwargs.get('meteor_gamma', 0.5)
                 )
 
-    def evalute(
+    def evaluate(
         self,
         references: Union[str, List[str]],
         hypotheses: Union[str, List[str]],
@@ -88,15 +88,14 @@ class Evaluator:
         all_scores = {}
 
         for metric_name, metric in self.metrics.items():
-
             scores = metric.compute(references, hypotheses)
 
             if metric_name == 'bleu':
                 all_scores.update(scores)
             elif metric_name == 'rouge_l':
-                all_scores = scores.get('rouge_l_f', 0.0)
+                all_scores['rouge_l'] = scores.get('rouge_l_f', 0.0)
             elif metric_name == 'meteor':
-                all_scores = scores.get('meteor', 0.0)
+                all_scores['meteor'] = scores.get('meteor', 0.0)
         
         return all_scores
 

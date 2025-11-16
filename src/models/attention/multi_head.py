@@ -77,13 +77,16 @@ class MultiHeadAttention(nn.Module):
             value (Tensor): Value tensor
                 Shape: (batch_size, seq_len_v, embed_dim)
             mask (Tensor, optional): Attention mask
-                Shape: (batch_size, seq_len_q, seq_len_k)
+                Shape: (batch_size, seq_len) for 1D padding mask, or
+                       (batch_size, seq_len_q, seq_len_k) for 2D attention mask
         
         Returns:
             output (Tensor): Multi-head attention output
                 Shape: (batch_size, seq_len_q, embed_dim)
         """
         batch_size = query.size(0)
+        seq_len_q = query.size(1)
+        seq_len_k = key.size(1)
         
         # Linear projections and split into heads
         # (batch_size, seq_len, embed_dim) -> (batch_size, seq_len, embed_dim)
@@ -99,8 +102,26 @@ class MultiHeadAttention(nn.Module):
         
         # Expand mask for multi-head if provided
         if mask is not None:
-            # (batch_size, seq_len_q, seq_len_k) -> (batch_size, 1, seq_len_q, seq_len_k)
-            mask = mask.unsqueeze(1).expand(batch_size, self.num_heads, -1, -1)
+            # Handle different mask shapes
+            if mask.dim() == 2:
+                # 1D padding mask: (batch_size, seq_len)
+                # Convert to 2D attention mask: (batch_size, seq_len_q, seq_len_k)
+                # For self-attention: seq_len_q == seq_len_k == seq_len, broadcast along both dimensions
+                # For cross-attention: mask applies to key, so we broadcast along query dimension
+                if seq_len_q == seq_len_k and mask.size(1) == seq_len_q:
+                    # Self-attention case: create proper 2D mask
+                    # mask[i, j, k] = True if both j and k are not padding
+                    mask = mask.unsqueeze(2) & mask.unsqueeze(1)  # (batch_size, seq_len_q, seq_len_k)
+                else:
+                    # Cross-attention case: mask applies to key, broadcast along query
+                    mask = mask.unsqueeze(1)  # (batch_size, 1, seq_len_k)
+                    mask = mask.expand(batch_size, seq_len_q, -1)  # (batch_size, seq_len_q, seq_len_k)
+                mask = mask.unsqueeze(1)  # (batch_size, 1, seq_len_q, seq_len_k)
+            elif mask.dim() == 3:
+                # 2D attention mask: (batch_size, seq_len_q, seq_len_k)
+                mask = mask.unsqueeze(1)  # (batch_size, 1, seq_len_q, seq_len_k)
+            # Expand for multi-head: (batch_size, 1, seq_len_q, seq_len_k) -> (batch_size, num_heads, seq_len_q, seq_len_k)
+            mask = mask.expand(batch_size, self.num_heads, -1, -1)
         
         # Apply scaled dot-product attention
         # (batch_size, num_heads, seq_len_q, head_dim)

@@ -3,8 +3,8 @@ import json
 import torch
 from typing import List
 
-from .utils import preprocess_sentence
-from .Vietnamese_utils import analyze_Vietnamese, compose_word
+from vocabs.utils import preprocess_sentence
+from vocabs.Vietnamese_utils import analyze_Vietnamese, compose_word
 from typing import *
 
 class ViWordVocab:
@@ -28,11 +28,6 @@ class ViWordVocab:
 
         # only padding token is not allowed to be shown
         self.specials = [self.padding_token]
-
-    @property
-    def vocab_size(self):
-        """Return vocabulary size for compatibility with other vocab interfaces."""
-        return len(self.itos)
 
     def initialize_special_tokens(self, config) -> None:
         self.padding_token = config.PAD_TOKEN
@@ -60,15 +55,7 @@ class ViWordVocab:
 
             for key in data:
                 item = data[key]
-                # Handle both formats: {"key": {"caption": "..."}} and {"key": "..."}
-                if isinstance(item, dict) and "caption" in item:
-                    caption = item["caption"]
-                elif isinstance(item, str):
-                    caption = item
-                else:
-                    # Skip if item is neither a dict with caption nor a string
-                    continue
-                    
+                caption = item["caption"]
                 words = preprocess_sentence(caption)
                 for word in words:
                     components = analyze_Vietnamese(word)
@@ -148,3 +135,90 @@ class ViWordVocab:
         ]
 
         return captions
+
+
+if __name__ == "__main__":
+    
+    print("=" * 60)
+    print("Testing Vietnamese Phoneme Analysis")
+    print("=" * 60)
+    
+    # Test sentences
+    test_sentences = [
+        "Xin chào thế giới",
+        "Tôi yêu Việt Nam",
+        "Học máy thật sự là thú vị"
+    ]
+    
+    for sentence in test_sentences:
+        print(f"\n📝 Original: {sentence}")
+        
+        # Preprocess
+        words = preprocess_sentence(sentence)
+        print(f"   Preprocessed: {words}")
+        
+        # Analyze each word
+        print(f"   Phoneme breakdown:")
+        for word in words:
+            components = analyze_Vietnamese(word)
+            if components:
+                onset, medial, nucleus, coda = components
+                print(f"      '{word}' -> onset:{onset}, medial:{medial}, nucleus:{nucleus}, coda:{coda}")
+                
+                # Reconstruct word
+                reconstructed = compose_word(onset, medial, nucleus, coda)
+                match_symbol = "✓" if reconstructed == word else "✗"
+                print(f"         Reconstructed: '{reconstructed}' {match_symbol}")
+            else:
+                print(f"      '{word}' -> Cannot analyze")
+    
+    print("\n" + "=" * 60)
+    print("Testing with ViWordVocab (requires config)")
+    print("=" * 60)
+    
+    # Test with ViWordVocab if config is available
+    try:
+        # Create a simple config object for testing
+        class SimpleConfig:
+            PAD_TOKEN = "<pad>"
+            BOS_TOKEN = "<bos>"
+            EOS_TOKEN = "<eos>"
+            UNK_TOKEN = "<unk>"
+            TOKENIZER = "word"
+            
+            class JSON_PATH:
+                TRAIN = "dataset/vocabs/full_vocab_ipa.json"
+                DEV = "dataset/vocabs/full_vocab_ipa.json"
+                TEST = "dataset/vocabs/full_vocab_ipa.json"
+        
+        # Check if JSON file exists
+        if os.path.exists("dataset/vocabs/full_vocab_ipa.json"):
+            print("\n✓ Found vocabulary file, initializing ViWordVocab...")
+            
+            config = SimpleConfig()
+            vocab = ViWordVocab(config)
+            
+            print(f"   Vocabulary size: {len(vocab.stoi)}")
+            print(f"   Special tokens: {config.PAD_TOKEN}, {config.BOS_TOKEN}, {config.EOS_TOKEN}, {config.UNK_TOKEN}")
+            
+            # Test encode/decode
+            test_caption = preprocess_sentence("Xin chào Việt Nam")
+            print(f"\n📝 Test caption: {test_caption}")
+            
+            encoded = vocab.encode_caption(test_caption)
+            print(f"   Encoded shape: {encoded.shape}")
+            print(f"   Encoded tensor:\n{encoded}")
+            
+            decoded = vocab.decode_caption(encoded)
+            print(f"   Decoded: {decoded}")
+            
+        else:
+            print("\n⚠ Vocabulary JSON file not found.")
+            print("   Please ensure 'dataset/vocabs/full_vocab_ipa.json' exists.")
+            print("   Skipping ViWordVocab test.")
+            
+    except Exception as e:
+        print(f"\n⚠ Could not test ViWordVocab: {e}")
+        print("   This is expected if running without full dataset setup.")
+    
+    print("\n" + "=" * 60)

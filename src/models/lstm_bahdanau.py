@@ -265,13 +265,14 @@ class LSTMBahdanau(BaseModel):
         
         # Compute attention
         context_vector, _ = self.decoder.attention(decoder_hidden, encoder_outputs)
-        context_vector = context_vector.unsqueeze(0).unsqueeze(0)  # (1, 1, hidden_dim)
+        # context_vector shape: (batch_size, hidden_dim)
+        context_vector = context_vector.unsqueeze(1)  # (batch_size, 1, hidden_dim)
         
         # Embed token
-        embedded = self.decoder.embedding(tgt_token).unsqueeze(1)  # (batch, 1, embed_dim)
+        embedded = self.decoder.embedding(tgt_token).unsqueeze(1)  # (batch_size, 1, embed_dim)
         
         # Concatenate and decode
-        lstm_input = torch.cat([embedded, context_vector], dim=2)
+        lstm_input = torch.cat([embedded, context_vector], dim=2)  # (batch_size, 1, embed_dim + hidden_dim)
         lstm_output, hidden = self.decoder.lstm(lstm_input, hidden)
         
         # Project to vocabulary

@@ -30,21 +30,21 @@ data:
   target_level: "phoneme"
   
   # Direct paths to training data files
-  train_src: "dataset/vocabs/clean/train_end.en"
-  train_tgt: "dataset/vocabs/clean/train_end.vi"
+  train_src: "/kaggle/input/phomt/train_end_clean.en"
+  train_tgt: "/kaggle/input/phomt/train_end_clean.vi"
   
   # Direct paths to dev data files
-  dev_src: "dataset/vocabs/clean/dev_end.en"
-  dev_tgt: "dataset/vocabs/clean/dev_end.vi"
+  dev_src: "/kaggle/input/phomt/dev_end_clean.en"
+  dev_tgt: "/kaggle/input/phomt/dev_end_clean.vi"
   
   # Direct paths to test data files
-  test_src: "dataset/vocabs/clean/test_end.en"
-  test_tgt: "dataset/vocabs/clean/test_end.vi"
+  test_src: "/kaggle/input/phomt/test_end_clean.en"
+  test_tgt: "/kaggle/input/phomt/test_end_clean.vi"
   
   # Direct paths to vocabulary JSON files (for phoneme-level)
-  vocab_json_train: "dataset/vocabs/full_vocab_ipa.json"
-  vocab_json_dev: "dataset/vocabs/full_vocab_ipa.json"
-  vocab_json_test: "dataset/vocabs/full_vocab_ipa.json"
+  vocab_json_train: "/kaggle/input/phomt/full_vocab_ipa.json"
+  vocab_json_dev: "/kaggle/input/phomt/full_vocab_ipa.json"
+  vocab_json_test: "/kaggle/input/phomt/full_vocab_ipa.json"
   
   # Vocabulary settings
   min_count: 3
