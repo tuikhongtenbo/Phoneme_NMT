@@ -198,7 +198,9 @@ def main():
         config=config,
         train_loader=train_loader,
         dev_loader=dev_loader,
-        logger=logger
+        logger=logger,
+        input_vocab=input_vocab,
+        output_vocab=output_vocab
     )
     
     # Start training

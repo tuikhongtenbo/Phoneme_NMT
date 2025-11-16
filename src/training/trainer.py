@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional, Tuple, List
 import os
 import math
 from pathlib import Path
@@ -95,6 +95,7 @@ class Trainer:
         self.current_epoch = 0
         self.best_dev_loss = float('inf')
         self.best_dev_bleu = 0.0
+        self.metric_for_best = 'bleu'  
         
         # Checkpoint directory
         self.checkpoint_dir = Path("checkpoints")
@@ -288,6 +289,25 @@ class Trainer:
             'lr': self.optimizer.param_groups[0]['lr']
         }
     
+    def _decode_indices_to_text(self, indices: List[int], vocab) -> str:
+        """Decode indices to text string."""
+        if self.target_level == 'phoneme':
+            # For phoneme level, indices are 1D but represent phoneme IDs
+            # Need to handle differently - for now, decode as word-level
+            if hasattr(vocab, 'itos'):
+                tokens = [vocab.itos.get(idx, '<UNK>') for idx in indices if idx not in [0, 1, 2, 3]]
+                return ' '.join(tokens)
+        else:
+            # Word level
+            if hasattr(vocab, 'index2word'):
+                tokens = [vocab.index2word.get(idx, '<UNK>') for idx in indices if idx not in [0, 1, 2, 3]]
+                return ' '.join(tokens)
+            elif hasattr(vocab, 'itos'):
+                tokens = [vocab.itos.get(idx, '<UNK>') for idx in indices if idx not in [0, 1, 2, 3]]
+                return ' '.join(tokens)
+        
+        return ' '.join([str(idx) for idx in indices if idx not in [0, 1, 2, 3]])
+    
     def evaluate(self, data_loader: DataLoader) -> Dict[str, float]:
         """
         Evaluate model on a dataset.
@@ -296,13 +316,13 @@ class Trainer:
             data_loader: Data loader for evaluation
             
         Returns:
-            Dictionary with evaluation metrics
+            Dictionary with evaluation metrics (loss, perplexity, bleu_4)
         """
         self.model.eval()
         total_loss = 0.0
         total_tokens = 0
-        all_predictions = []
-        all_targets = []
+        all_predictions_text = []
+        all_targets_text = []
         
         with torch.no_grad():
             for batch in tqdm(data_loader, desc="Evaluating", leave=False):
@@ -322,19 +342,48 @@ class Trainer:
                 total_loss += loss.item() * num_tokens
                 total_tokens += num_tokens
                 
-                # Store predictions and targets for BLEU/ROUGE/METEOR
-                predictions = logits.argmax(dim=-1)
-                all_predictions.extend(predictions.cpu().tolist())
-                all_targets.extend(tgt_output.cpu().tolist())
+                # Get predictions (greedy decoding)
+                predictions = logits.argmax(dim=-1)  # (batch_size, tgt_len-1)
+                
+                # Decode predictions and targets to text for BLEU calculation
+                if self.output_vocab is not None:
+                    for pred_seq, tgt_seq in zip(predictions, tgt_output):
+                        # Remove padding tokens
+                        pred_ids = pred_seq[tgt_seq != self.pad_id].cpu().tolist()
+                        tgt_ids = tgt_seq[tgt_seq != self.pad_id].cpu().tolist()
+                        
+                        # Stop at EOS
+                        if self.eos_id in pred_ids:
+                            pred_ids = pred_ids[:pred_ids.index(self.eos_id)]
+                        if self.eos_id in tgt_ids:
+                            tgt_ids = tgt_ids[:tgt_ids.index(self.eos_id)]
+                        
+                        # Decode to text
+                        pred_text = self._decode_indices_to_text(pred_ids, self.output_vocab)
+                        tgt_text = self._decode_indices_to_text(tgt_ids, self.output_vocab)
+                        
+                        all_predictions_text.append(pred_text)
+                        all_targets_text.append(tgt_text)
         
         avg_loss = total_loss / total_tokens if total_tokens > 0 else 0.0
         
-        # Note: For proper BLEU/ROUGE/METEOR, you'd need to convert IDs back to text
-        # This is a simplified version
         metrics = {
             'loss': avg_loss,
             'perplexity': torch.exp(torch.tensor(avg_loss)).item() if avg_loss > 0 else float('inf')
         }
+        
+        # Calculate BLEU if we have decoded text
+        if all_predictions_text and self.output_vocab is not None:
+            try:
+                bleu_scores = self.evaluator.evaluate(all_targets_text, all_predictions_text)
+                metrics.update(bleu_scores)
+                # Use BLEU-4 as main metric
+                metrics['bleu'] = bleu_scores.get('bleu_4', bleu_scores.get('bleu', 0.0))
+            except Exception as e:
+                self.logger.warning(f"Could not calculate BLEU: {e}")
+                metrics['bleu'] = 0.0
+        else:
+            metrics['bleu'] = 0.0
         
         return metrics
     
@@ -487,12 +536,20 @@ class Trainer:
                     dev_metrics = self.evaluate(self.dev_loader)
                     self.logger.info(f"Dev Loss: {dev_metrics['loss']:.4f}, "
                                    f"Perplexity: {dev_metrics['perplexity']:.2f}")
+                    if 'bleu' in dev_metrics:
+                        self.logger.info(f"Dev BLEU-4: {dev_metrics['bleu']:.4f}")
                     
-                    # Save if best
-                    is_best = dev_metrics['loss'] < self.best_dev_loss
-                    if is_best:
-                        self.best_dev_loss = dev_metrics['loss']
-                        self.logger.info(f"New best dev loss: {self.best_dev_loss:.4f}")
+                    # Save if best (based on BLEU)
+                    if self.metric_for_best == 'bleu':
+                        is_best = dev_metrics.get('bleu', 0.0) > self.best_dev_bleu
+                        if is_best:
+                            self.best_dev_bleu = dev_metrics.get('bleu', 0.0)
+                            self.logger.info(f"New best dev BLEU: {self.best_dev_bleu:.4f}")
+                    else:
+                        is_best = dev_metrics['loss'] < self.best_dev_loss
+                        if is_best:
+                            self.best_dev_loss = dev_metrics['loss']
+                            self.logger.info(f"New best dev loss: {self.best_dev_loss:.4f}")
                 
                 # Save checkpoint
                 if self.global_step % self.save_every == 0:
@@ -512,12 +569,20 @@ class Trainer:
                 dev_metrics = self.evaluate(self.dev_loader)
                 self.logger.info(f"  Dev Loss: {dev_metrics['loss']:.4f}")
                 self.logger.info(f"  Dev Perplexity: {dev_metrics['perplexity']:.2f}")
+                if 'bleu' in dev_metrics:
+                    self.logger.info(f"  Dev BLEU-4: {dev_metrics['bleu']:.4f}")
                 
-                # Save if best
-                is_best = dev_metrics['loss'] < self.best_dev_loss
-                if is_best:
-                    self.best_dev_loss = dev_metrics['loss']
-                    self.logger.info(f"  ✓ New best dev loss: {self.best_dev_loss:.4f}")
+                # Save if best (based on BLEU)
+                if self.metric_for_best == 'bleu':
+                    is_best = dev_metrics.get('bleu', 0.0) > self.best_dev_bleu
+                    if is_best:
+                        self.best_dev_bleu = dev_metrics.get('bleu', 0.0)
+                        self.logger.info(f"  ✓ New best dev BLEU: {self.best_dev_bleu:.4f}")
+                else:
+                    is_best = dev_metrics['loss'] < self.best_dev_loss
+                    if is_best:
+                        self.best_dev_loss = dev_metrics['loss']
+                        self.logger.info(f"  ✓ New best dev loss: {self.best_dev_loss:.4f}")
                 
                 self.save_checkpoint(is_best=is_best)
             else:
@@ -538,5 +603,8 @@ class Trainer:
         
         self.logger.info("\n" + "=" * 80)
         self.logger.info("Training Complete!")
-        self.logger.info(f"Best dev loss: {self.best_dev_loss:.4f}")
+        if self.metric_for_best == 'bleu':
+            self.logger.info(f"Best dev BLEU: {self.best_dev_bleu:.4f}")
+        else:
+            self.logger.info(f"Best dev loss: {self.best_dev_loss:.4f}")
         self.logger.info("=" * 80)
