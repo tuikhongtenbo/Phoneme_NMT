@@ -54,7 +54,8 @@ class DataConfig(BaseModel):
     pad_id: int = Field(0, description="Padding token ID")
     unk_id: int = Field(3, description="Unknown token ID")
     
-    # Target level: 'word' or 'phoneme'
+    # Source and Target levels: 'word' or 'phoneme'
+    source_level: Literal["word", "phoneme"] = Field("word", description="Source sequence level: word or phoneme")
     target_level: Literal["word", "phoneme"] = Field("phoneme", description="Target sequence level: word or phoneme")
     
     # Direct paths to training data files

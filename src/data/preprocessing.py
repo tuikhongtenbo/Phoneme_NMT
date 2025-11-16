@@ -5,10 +5,11 @@ import os
 import torch
 from collections import Counter
 
-# Import utilities and Vocab class from src.utils/
 from .vocabs.utils import preprocess_sentence
-from .vocabs.viword_vocab import ViWordVocab # Phoneme/Syllable-level Vocab
+from .vocabs.viword_vocab import ViWordVocab
 from .vocabs.Vietnamese_utils import analyze_Vietnamese
+from .vocabs.English_utils import convert_English_IPA_to_phoneme, EnglishIPA
+
 
 # Define Special Tokens and IDs for consistency
 PAD_TOKEN, SOS_TOKEN, EOS_TOKEN, UNK_TOKEN = '<PAD>', '<SOS>', '<EOS>', '<UNK>'
@@ -100,7 +101,6 @@ class ViWordLevelVocab(BaseVocab):
     
     def __init__(self, config):
         super().__init__('vi_word')
-        # self.config = config # You might need config for other settings
     
     @property
     def vocab_size(self):
@@ -112,54 +112,122 @@ class ViWordLevelVocab(BaseVocab):
         indices = [self.bos_idx]
         unk_index = self.unk_idx
         for word in words:
-            # Note: preprocess_sentence is already applied in add_sentence/add_word
-            # Here we assume 'words' is already a list of words from the raw VI sentence
             indices.append(self.word2index.get(word, unk_index))
         indices.append(self.eos_idx)
         return indices
 
 
-def create_vi_vocab_config(pydantic_config: Any, json_paths: Optional[Dict[str, str]] = None) -> Any:
-    """
-    Create a config object compatible with ViWordVocab from Pydantic Config.
+class EnPhonemeVocab:
+    """Phoneme-level vocabulary for English (Source)."""
     
-    Args:
-        pydantic_config: Config object from configs.config.Config
-        json_paths: Optional dict with 'train', 'dev', 'test' JSON paths
+    def __init__(self, config):
+        self.initialize_special_tokens()
+        phonemes = self.make_vocab(config)
+        phonemes = sorted(list(phonemes))
         
-    Returns:
-        Config-like object with TOKENIZER, PAD_TOKEN, BOS_TOKEN, EOS_TOKEN, UNK_TOKEN, JSON_PATH
-    """
+        self.itos = {i: tok for i, tok in enumerate(self.specials + phonemes)}
+        self.stoi = {tok: i for i, tok in enumerate(self.specials + phonemes)}
+        self.specials = [self.padding_token]
+    
+    @property
+    def vocab_size(self):
+        """Return vocabulary size."""
+        return len(self.itos)
+    
+    def initialize_special_tokens(self) -> None:
+        """Initialize special tokens."""
+        self.padding_token = PAD_TOKEN
+        self.bos_token = SOS_TOKEN
+        self.eos_token = EOS_TOKEN
+        self.unk_token = UNK_TOKEN
+        
+        self.specials = [self.padding_token, self.bos_token, self.eos_token, self.unk_token]
+        self.padding_idx = 0
+        self.bos_idx = 1
+        self.eos_idx = 2
+        self.unk_idx = 3
+    
+    def make_vocab(self, config) -> set:
+        """Build phoneme vocabulary from training data."""
+        
+        phonemes = set()
+        
+        # Add all possible English phonemes
+        phonemes.update(EnglishIPA.Vowels)
+        phonemes.update(EnglishIPA.Consonants)
+        
+        # Collect additional phonemes from training data if available
+        if hasattr(config, 'data') and hasattr(config.data, 'train_src'):
+            train_path = config.data.train_src
+            if os.path.exists(train_path):
+                with open(train_path, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line:
+                            # Assume line is IPA or can be converted
+                            # For now, just collect from existing phonemes
+                            # Can be extended to parse IPA from data
+                            pass
+        
+        return phonemes
+    
+    def encode_caption(self, sentence: str) -> List[List[int]]:
+        """Convert English sentence to phoneme indices."""
+        # Assume sentence is in IPA format
+        try:
+            phoneme_seqs = convert_English_IPA_to_phoneme(sentence)
+        except:
+            # If conversion fails, treat as word-level and use UNK
+            phoneme_seqs = []
+        
+        encoded = [[self.bos_idx]]
+        for phoneme_seq in phoneme_seqs:
+            if isinstance(phoneme_seq, list):
+                # phoneme_seq is [initial, vowel, final]
+                for phoneme in phoneme_seq:
+                    if phoneme:
+                        encoded.append([self.stoi.get(phoneme, self.unk_idx)])
+            else:
+                encoded.append([self.stoi.get(phoneme_seq, self.unk_idx)])
+        encoded.append([self.eos_idx])
+        
+        return encoded
+    
+    def sentence_to_indices(self, sentence: str) -> List[int]:
+        """Convert sentence to indices (for compatibility with word-level)."""
+        phoneme_seqs = self.encode_caption(sentence)
+        return [idx for seq in phoneme_seqs for idx in seq]
+
+
+# --- Config Helpers ---
+
+def create_vi_vocab_config(pydantic_config: Any) -> Any:
+    """Create config object compatible with ViWordVocab."""
     class ViVocabConfig:
-        def __init__(self, pydantic_config, json_paths):
-            # Tokenizer type
+        def __init__(self, pydantic_config):
             self.TOKENIZER = "word"
-            
-            # Special tokens - use constants from preprocessing
             self.PAD_TOKEN = PAD_TOKEN
             self.BOS_TOKEN = SOS_TOKEN
             self.EOS_TOKEN = EOS_TOKEN
             self.UNK_TOKEN = UNK_TOKEN
             
-            # Get vocab paths directly from config
             if hasattr(pydantic_config, 'data'):
                 train_path = getattr(pydantic_config.data, 'vocab_json_train', 'dataset/vocabs/full_vocab_ipa.json')
                 dev_path = getattr(pydantic_config.data, 'vocab_json_dev', 'dataset/vocabs/full_vocab_ipa.json')
                 test_path = getattr(pydantic_config.data, 'vocab_json_test', 'dataset/vocabs/full_vocab_ipa.json')
             else:
-                # Fallback to default paths
-                train_path = 'dataset/vocabs/full_vocab_ipa.json'
-                dev_path = 'dataset/vocabs/full_vocab_ipa.json'
-                test_path = 'dataset/vocabs/full_vocab_ipa.json'
+                train_path = 'dataset/vocabs/clean/full_vocab.json'
+                dev_path = 'dataset/vocabs/clean/full_vocab.json'
+                test_path = 'dataset/vocabs/clean/full_vocab.json'
             
-            # Create JSON_PATH object
             self.JSON_PATH = type('JSON_PATH', (), {
                 'TRAIN': train_path,
                 'DEV': dev_path,
                 'TEST': test_path
             })()
     
-    return ViVocabConfig(pydantic_config, json_paths)
+    return ViVocabConfig(pydantic_config)
+
 
 # --- MAIN DATA LOADING FUNCTIONS ---
 
@@ -219,11 +287,14 @@ def load_pairs(split: str, config: Any) -> List[Tuple[str, str]]:
 
 def prepare_data(splits: List[str], max_len: int, min_count: int = 3, config: Any = None) -> Dict[str, Any]:
     """
-    Loads raw data, builds vocabularies, converts sentences to indices, and filters.
-    The tokenization level for Target (VI) is selected via config.target_level.
+    Load data, build vocabularies, convert to indices, and filter.
+    
+    Supports:
+    - Source level: 'word' or 'phoneme' (EN)
+    - Target level: 'word' or 'phoneme' (VI)
     """
     
-    # 1. Load all raw data
+    # 1. Load raw data
     all_raw_pairs = {}
     for split in splits:
         all_raw_pairs[split] = load_pairs(split, config)
@@ -231,73 +302,83 @@ def prepare_data(splits: List[str], max_len: int, min_count: int = 3, config: An
     if 'train' not in all_raw_pairs:
         raise ValueError("Missing 'train' split required for vocabulary building.")
 
-    # 2. Build English Vocab (Source - always Word-level)
-    input_vocab = EnWordVocab("en")
-    for en_sent, _ in all_raw_pairs['train']:
-        input_vocab.add_sentence(en_sent)
-    input_vocab.trim(min_count)
-    print(f"Input Vocab Size (EN Word): {input_vocab.count}")
-    
-    # 3. Initialize Vietnamese Vocab (Target - level depends on config)
-    if config is not None and hasattr(config, 'data') and hasattr(config.data, 'target_level'):
-        target_level = config.data.target_level.lower()
+    # 2. Get tokenization levels from config
+    if config and hasattr(config, 'data'):
+        source_level = getattr(config.data, 'source_level', 'word').lower()
+        target_level = getattr(config.data, 'target_level', 'word').lower()
     else:
-        target_level = 'phoneme'  # Default to 'phoneme'
-    print(f"Target (VI) tokenization level set to: **{target_level}**")
+        source_level = 'word'
+        target_level = 'phoneme'
+    
+    print(f"Source (EN) tokenization level: **{source_level}**")
+    print(f"Target (VI) tokenization level: **{target_level}**")
 
+    # 3. Build Source Vocabulary (EN)
+    if source_level == 'word':
+        input_vocab = EnWordVocab("en")
+        for en_sent, _ in all_raw_pairs['train']:
+            input_vocab.add_sentence(en_sent)
+        input_vocab.trim(min_count)
+        print(f"Input Vocab Size (EN Word): {input_vocab.count}")
+    elif source_level == 'phoneme':
+        input_vocab = EnPhonemeVocab(config)
+        print(f"Input Vocab Size (EN Phonemes): {input_vocab.vocab_size}")
+    else:
+        raise ValueError(f"Unknown source_level: {source_level}. Must be 'word' or 'phoneme'.")
+
+    # 4. Build Target Vocabulary (VI)
     if target_level == 'word':
         output_vocab = ViWordLevelVocab(config)
-        # Build VI Word-level vocab from train split
         for _, vi_sent in all_raw_pairs['train']:
             output_vocab.add_sentence(vi_sent)
         output_vocab.trim(min_count)
         print(f"Output Vocab Size (VI Word): {output_vocab.count}")
-    
     elif target_level == 'phoneme':
         try:
-            # Create config compatible with ViWordVocab
-            vi_vocab_config = create_vi_vocab_config(config, None)
-            # ViWordVocab handles its own vocab building (e.g., from JSON)
+            vi_vocab_config = create_vi_vocab_config(config)
             output_vocab = ViWordVocab(vi_vocab_config)
             print(f"Output Vocab Size (VI Phonemes): {output_vocab.vocab_size}")
         except Exception as e:
             print(f"❌ ERROR: Could not initialize ViWordVocab. Falling back to Word-level.")
             print(f"Error details: {e}")
-            target_level = 'word' # Fallback
+            target_level = 'word'
             output_vocab = ViWordLevelVocab(config)
             for _, vi_sent in all_raw_pairs['train']:
                 output_vocab.add_sentence(vi_sent)
             output_vocab.trim(min_count)
             print(f"Output Vocab Size (VI Word): {output_vocab.count}")
-    
     else:
         raise ValueError(f"Unknown target_level: {target_level}. Must be 'word' or 'phoneme'.")
 
-    # 4. Map to IDs and filter sentences
+    # 5. Convert to indices and filter
     indexed_data = {}
     
     for split, pairs in all_raw_pairs.items():
         current_indexed_pairs = []
         for en_sent, vi_sent in pairs:
-            # Source (EN - Word Level)
-            en_indices = [input_vocab.bos_idx] + input_vocab.sentence_to_indices(en_sent) + [input_vocab.eos_idx]
+            # Source (EN)
+            if source_level == 'word':
+                en_indices = [input_vocab.bos_idx] + input_vocab.sentence_to_indices(en_sent) + [input_vocab.eos_idx]
+            else:  # phoneme
+                en_indices = input_vocab.encode_caption(en_sent)
             
             # Target (VI)
-            vi_words = vi_sent.split()
-            # The structure of vi_indices depends on the level (1D List[int] or 2D List[List[int]])
+            vi_words = preprocess_sentence(vi_sent)
             vi_indices = output_vocab.encode_caption(vi_words)
             
-            # Determine target length for filtering
+            # Calculate lengths for filtering
+            if source_level == 'word':
+                en_len = len(en_indices)
+            else:  # phoneme
+                en_len = len(en_indices) if isinstance(en_indices[0], list) else len(en_indices)
+            
             if target_level == 'word':
-                # vi_indices is List[int], length is len(vi_indices)
                 vi_len = len(vi_indices)
-            else: # 'phoneme'
-                # vi_indices is List[List[int]], length is len(vi_indices)
-                vi_len = len(vi_indices)
-                
-            # Filter sentence lengths
-            if len(en_indices) <= max_len and vi_len <= max_len:
-                # Store the indexed pair. Type of vi_indices: List[int] or List[List[int]]
+            else:  # phoneme
+                vi_len = len(vi_indices) if isinstance(vi_indices[0], list) else len(vi_indices)
+            
+            # Filter by length
+            if en_len <= max_len and vi_len <= max_len:
                 current_indexed_pairs.append((en_indices, vi_indices))
         
         indexed_data[split] = current_indexed_pairs
@@ -307,5 +388,6 @@ def prepare_data(splits: List[str], max_len: int, min_count: int = 3, config: An
         'input_vocab': input_vocab,
         'output_vocab': output_vocab,
         'data': indexed_data,
-        'target_level': target_level # Return the chosen level
-    }# Data cleaning
+        'source_level': source_level,
+        'target_level': target_level
+    }
