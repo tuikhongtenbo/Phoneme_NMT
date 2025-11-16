@@ -2,6 +2,7 @@ import os
 import json
 import torch
 from typing import List
+from tqdm import tqdm
 
 from .utils import preprocess_sentence
 from .Vietnamese_utils import analyze_Vietnamese, compose_word
@@ -59,12 +60,19 @@ class ViWordVocab:
         phonemes = set()
         
         # Collect phonemes from Vietnamese text files
+        print("Building Vietnamese phoneme vocabulary from text files...")
         for path in vi_text_paths:
             if not os.path.exists(path):
-                continue  
-                
+                print(f"⚠ Skipping non-existent file: {path}")
+                continue
+            
+            print(f"Processing: {path}")
+            # Count lines for progress bar
             with open(path, 'r', encoding='utf-8') as f:
-                for line in f:
+                total_lines = sum(1 for _ in f)
+            
+            with open(path, 'r', encoding='utf-8') as f:
+                for line in tqdm(f, total=total_lines, desc=f"Reading {os.path.basename(path)}"):
                     line = line.strip()
                     if not line:
                         continue
@@ -75,6 +83,7 @@ class ViWordVocab:
                         if components:
                             phonemes.update([phoneme for phoneme in components if phoneme])
 
+        print(f"✓ Built Vietnamese phoneme vocabulary with {len(phonemes)} unique phonemes")
         return phonemes
 
     def encode_caption(self, caption: List[str]) -> torch.Tensor:

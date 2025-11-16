@@ -3,6 +3,8 @@
 from typing import List, Dict, Tuple, Any, Optional
 import os
 import torch
+import json
+from tqdm import tqdm
 from collections import Counter
 
 from .vocabs.utils import preprocess_sentence
@@ -134,9 +136,7 @@ class EnPhonemeVocab:
         self.specials = [self.padding_token]
     
     def load_ipa_mapping(self, config) -> Dict[str, str]:
-        """Load English word -> IPA mapping from JSON file specified in config."""
-        import json
-        
+        """Load English word -> IPA mapping from JSON file specified in config."""        
         # Get JSON path from config
         json_path = None
         if hasattr(config, 'data'):
@@ -158,17 +158,20 @@ class EnPhonemeVocab:
                 f"Please set vocab_json_train in config or place file at full_vocab.json"
             )
         
+        print(f"Loading English IPA mapping from: {json_path}")
         with open(json_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         
         # Convert to word -> IPA mapping
+        print("Converting to word -> IPA mapping...")
         word_to_ipa = {}
-        for key, value in data.items():
+        for key, value in tqdm(data.items(), desc="Loading IPA mapping"):
             if isinstance(value, str):
                 word_to_ipa[key.lower()] = value
             elif isinstance(value, dict) and 'caption' in value:
                 word_to_ipa[key.lower()] = value['caption']
         
+        print(f"✓ Loaded {len(word_to_ipa)} word -> IPA mappings")
         return word_to_ipa
     
     @property
@@ -199,21 +202,21 @@ class EnPhonemeVocab:
         
         # Collect phonemes from IPA mappings in JSON file
         if hasattr(self, 'word_to_ipa'):
-            for ipa_str in self.word_to_ipa.values():
+            print("Building phoneme vocabulary from IPA mappings...")
+            for ipa_str in tqdm(self.word_to_ipa.values(), desc="Processing IPA strings"):
                 try:
                     phoneme_seqs = convert_English_IPA_to_phoneme(ipa_str)
                     for phoneme_seq in phoneme_seqs:
-                        if isinstance(phoneme_seq, list):
-                            # phoneme_seq is [initial, vowel, final]
-                            for phoneme in phoneme_seq:
-                                if phoneme:
+                        if isinstance(phoneme_seq, tuple) and len(phoneme_seq) == 3:
+                            initial, vowel, final = phoneme_seq
+                            # Add each non-empty string phoneme
+                            for phoneme in [initial, vowel, final]:
+                                if phoneme and isinstance(phoneme, str):
                                     phonemes.add(phoneme)
-                        else:
-                            if phoneme_seq:
-                                phonemes.add(phoneme_seq)
                 except:
-                    pass  # Skip invalid IPA
+                    pass  
         
+        print(f"✓ Built phoneme vocabulary with {len(phonemes)} unique phonemes")
         return phonemes
     
     def encode_caption(self, sentence: str) -> List[List[int]]:
@@ -236,14 +239,12 @@ class EnPhonemeVocab:
                     # Convert IPA string to phonemes
                     phoneme_seqs = convert_English_IPA_to_phoneme(ipa_str)
                     for phoneme_seq in phoneme_seqs:
-                        if isinstance(phoneme_seq, list):
-                            # phoneme_seq is [initial, vowel, final]
-                            for phoneme in phoneme_seq:
-                                if phoneme:
+                        if isinstance(phoneme_seq, tuple) and len(phoneme_seq) == 3:
+                            initial, vowel, final = phoneme_seq
+                            # Encode each non-empty phoneme
+                            for phoneme in [initial, vowel, final]:
+                                if phoneme and isinstance(phoneme, str):
                                     encoded.append([self.stoi.get(phoneme, self.unk_idx)])
-                        else:
-                            if phoneme_seq:
-                                encoded.append([self.stoi.get(phoneme_seq, self.unk_idx)])
                 except:
                     # If IPA conversion fails, use UNK
                     encoded.append([self.unk_idx])
