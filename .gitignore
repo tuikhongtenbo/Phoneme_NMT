@@ -11,3 +11,4 @@
 /results/*
 test_*.py
 *_test.py
+*.txt
