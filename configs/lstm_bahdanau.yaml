@@ -9,7 +9,7 @@ model:
   attention_type: "bahdanau"
 
 training:
-  batch_size: 128
+  batch_size: 32
   num_epochs: 50
   learning_rate: 0.001
   optimizer: "adam"

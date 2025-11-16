@@ -23,10 +23,6 @@ class ViWordVocab:
             tok: i for i, tok in enumerate(self.specials + phonemes)
         }
 
-        # Vocabulary size (total number of tokens including specials)
-        self.vocab_size = len(self.stoi)
-
-        # only padding token is not allowed to be shown
         self.specials = [self.padding_token]
 
     @property
