@@ -213,10 +213,7 @@ class Trainer:
         
         # Handle phoneme-level targets (2D -> flatten for loss)
         if self.target_level == 'phoneme' and len(tgt_seq.shape) == 3:
-            # tgt_seq is (batch_size, tgt_len, 4)
-            # For now, we'll use the first component or flatten
-            # This is a simplification - you may need to adjust based on your phoneme representation
-            tgt_seq = tgt_seq[:, :, 0]  # Use first component, or implement proper handling
+            tgt_seq = tgt_seq[:, :, 0]
         
         # Create masks
         src_mask = self._create_padding_mask(src_seq, self.pad_id)
@@ -258,8 +255,6 @@ class Trainer:
         logits = self.model(src_seq, tgt_input, src_mask=src_mask, tgt_mask=tgt_mask)
         
         # Calculate loss
-        # logits: (batch_size, tgt_len-1, vocab_size)
-        # tgt_output: (batch_size, tgt_len-1)
         loss = self.criterion(logits.reshape(-1, logits.size(-1)), tgt_output.reshape(-1))
         
         # Backward pass
@@ -271,7 +266,7 @@ class Trainer:
         # Optimizer step
         self.optimizer.step()
         
-        # Update learning rate for step-based schedulers (LambdaLR, warmup schedulers)
+        # Update learning rate for step-based schedulers
         if self.scheduler is not None and isinstance(self.scheduler, optim.lr_scheduler.LambdaLR):
             self.scheduler.step()
         
@@ -291,22 +286,16 @@ class Trainer:
     
     def _decode_indices_to_text(self, indices: List[int], vocab) -> str:
         """Decode indices to text string."""
-        if self.target_level == 'phoneme':
-            # For phoneme level, indices are 1D but represent phoneme IDs
-            # Need to handle differently - for now, decode as word-level
-            if hasattr(vocab, 'itos'):
-                tokens = [vocab.itos.get(idx, '<UNK>') for idx in indices if idx not in [0, 1, 2, 3]]
-                return ' '.join(tokens)
-        else:
-            # Word level
-            if hasattr(vocab, 'index2word'):
-                tokens = [vocab.index2word.get(idx, '<UNK>') for idx in indices if idx not in [0, 1, 2, 3]]
-                return ' '.join(tokens)
-            elif hasattr(vocab, 'itos'):
-                tokens = [vocab.itos.get(idx, '<UNK>') for idx in indices if idx not in [0, 1, 2, 3]]
-                return ' '.join(tokens)
+        special_tokens = {0, 1, 2, 3}  # PAD, SOS, EOS, UNK
         
-        return ' '.join([str(idx) for idx in indices if idx not in [0, 1, 2, 3]])
+        if hasattr(vocab, 'index2word'):
+            tokens = [vocab.index2word.get(idx, '<UNK>') for idx in indices if idx not in special_tokens]
+        elif hasattr(vocab, 'itos'):
+            tokens = [vocab.itos.get(idx, '<UNK>') for idx in indices if idx not in special_tokens]
+        else:
+            tokens = [str(idx) for idx in indices if idx not in special_tokens]
+        
+        return ' '.join(tokens)
     
     def evaluate(self, data_loader: DataLoader) -> Dict[str, float]:
         """
@@ -316,7 +305,7 @@ class Trainer:
             data_loader: Data loader for evaluation
             
         Returns:
-            Dictionary with evaluation metrics (loss, perplexity, bleu_4)
+            Dictionary with evaluation metrics (loss, perplexity, bleu)
         """
         self.model.eval()
         total_loss = 0.0
@@ -377,8 +366,12 @@ class Trainer:
             try:
                 bleu_scores = self.evaluator.evaluate(all_targets_text, all_predictions_text)
                 metrics.update(bleu_scores)
-                # Use BLEU-4 as main metric
-                metrics['bleu'] = bleu_scores.get('bleu_4', bleu_scores.get('bleu', 0.0))
+                # Use average of BLEU-1, BLEU-2, BLEU-3, BLEU-4 as main metric
+                bleu_1 = bleu_scores.get('bleu_1', 0.0)
+                bleu_2 = bleu_scores.get('bleu_2', 0.0)
+                bleu_3 = bleu_scores.get('bleu_3', 0.0)
+                bleu_4 = bleu_scores.get('bleu_4', 0.0)
+                metrics['bleu'] = (bleu_1 + bleu_2 + bleu_3 + bleu_4) / 4.0
             except Exception as e:
                 self.logger.warning(f"Could not calculate BLEU: {e}")
                 metrics['bleu'] = 0.0
@@ -387,45 +380,6 @@ class Trainer:
         
         return metrics
     
-    def evaluate_with_metrics(self, data_loader: DataLoader, set_name: str = "Evaluation"):
-        """
-        Evaluate model with BLEU/ROUGE/METEOR metrics.
-        Note: This requires vocab objects to decode, so it's simplified for now.
-        """
-        self.model.eval()
-        all_predictions_ids = []
-        all_targets_ids = []
-        
-        with torch.no_grad():
-            for batch in tqdm(data_loader, desc=f"Evaluating {set_name}", leave=False):
-                src_seq, tgt_seq = batch
-                src_seq, tgt_input, tgt_output, (src_mask, tgt_mask) = self._prepare_batch(src_seq, tgt_seq)
-                
-                # Forward pass
-                logits = self.model(src_seq, tgt_input, src_mask=src_mask, tgt_mask=tgt_mask)
-                
-                # Get predictions (greedy decoding)
-                predictions = logits.argmax(dim=-1)  # (batch_size, tgt_len-1)
-                
-                # Store for metrics (remove padding)
-                for pred_seq, tgt_seq in zip(predictions, tgt_output):
-                    # Remove padding tokens
-                    pred_ids = pred_seq[tgt_seq != self.pad_id].cpu().tolist()
-                    tgt_ids = tgt_seq[tgt_seq != self.pad_id].cpu().tolist()
-                    all_predictions_ids.append(pred_ids)
-                    all_targets_ids.append(tgt_ids)
-        
-        # For now, just log that we have predictions
-        # Full BLEU/ROUGE/METEOR requires decoding to text which needs vocab objects
-        self.logger.info(f"  {set_name}: {len(all_predictions_ids)} sequences evaluated")
-        self.logger.info(f"  Note: BLEU/ROUGE/METEOR metrics require text decoding (vocab objects needed)")
-        self.logger.info(f"  Predictions and targets collected for {len(all_predictions_ids)} sequences")
-        
-        return {
-            'num_sequences': len(all_predictions_ids),
-            'predictions': all_predictions_ids,
-            'targets': all_targets_ids
-        }
     
     def save_checkpoint(self, is_best: bool = False, suffix: str = ""):
         """
@@ -537,7 +491,7 @@ class Trainer:
                     self.logger.info(f"Dev Loss: {dev_metrics['loss']:.4f}, "
                                    f"Perplexity: {dev_metrics['perplexity']:.2f}")
                     if 'bleu' in dev_metrics:
-                        self.logger.info(f"Dev BLEU-4: {dev_metrics['bleu']:.4f}")
+                        self.logger.info(f"Dev BLEU: {dev_metrics['bleu']:.4f}")
                     
                     # Save if best (based on BLEU)
                     if self.metric_for_best == 'bleu':
@@ -570,7 +524,7 @@ class Trainer:
                 self.logger.info(f"  Dev Loss: {dev_metrics['loss']:.4f}")
                 self.logger.info(f"  Dev Perplexity: {dev_metrics['perplexity']:.2f}")
                 if 'bleu' in dev_metrics:
-                    self.logger.info(f"  Dev BLEU-4: {dev_metrics['bleu']:.4f}")
+                    self.logger.info(f"  Dev BLEU: {dev_metrics['bleu']:.4f}")
                 
                 # Save if best (based on BLEU)
                 if self.metric_for_best == 'bleu':
@@ -588,18 +542,10 @@ class Trainer:
             else:
                 self.save_checkpoint(is_best=False)
             
-            # Update learning rate (for epoch-based schedulers)
-            # Note: LambdaLR is updated per-step, not per-epoch
+            # Update learning rate for epoch-based schedulers
             if self.scheduler and isinstance(self.scheduler, (optim.lr_scheduler.CosineAnnealingLR, 
                                                                optim.lr_scheduler.StepLR)):
                 self.scheduler.step()
-        
-        # Final evaluation with BLEU/ROUGE/METEOR
-        if self.dev_loader:
-            self.logger.info("\n" + "=" * 80)
-            self.logger.info("Final Evaluation with BLEU/ROUGE/METEOR")
-            self.logger.info("=" * 80)
-            self.evaluate_with_metrics(self.dev_loader, "Dev Set")
         
         self.logger.info("\n" + "=" * 80)
         self.logger.info("Training Complete!")
