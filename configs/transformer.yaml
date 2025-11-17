@@ -11,7 +11,7 @@ model:
   ff_dim: 2048
 
 training:
-  batch_size: 32
+  batch_size: 8
   num_epochs: 1
   learning_rate: 0.001
   optimizer: "adamw"
@@ -51,7 +51,7 @@ data:
   
   # Vocabulary settings
   min_count: 3
-  max_seq_len: 100
+  max_seq_len: 64
 
 device: "cuda"
 seed: 42

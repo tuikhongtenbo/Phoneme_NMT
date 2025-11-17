@@ -20,14 +20,17 @@ class TranslationDataset(Dataset):
         return len(self.pairs)
 
     def __getitem__(self, idx):
-        src_indices = self.pairs[idx][0] # List[int] - EN (Word Level)
+        src_indices = self.pairs[idx][0] # List[int] or List[List[int]] - EN
         tgt_indices = self.pairs[idx][1] # List[int] or List[List[int]] - VI
         
-        # Return Tensors
+        # Handle source: can be 1D (word) or nested list (phoneme)
+        if isinstance(src_indices, list) and len(src_indices) > 0 and isinstance(src_indices[0], list):
+            src_indices = [item[0] if isinstance(item, list) and len(item) > 0 else item for item in src_indices]
+        
         src_tensor = torch.tensor(src_indices, dtype=torch.long)
         
         # Target tensor can be 1D (Word) or 2D (Syllable/Phoneme)
-        if isinstance(tgt_indices[0], list):
+        if isinstance(tgt_indices, list) and len(tgt_indices) > 0 and isinstance(tgt_indices[0], list):
             # Phoneme/Syllable-level (2D)
             tgt_tensor = torch.tensor(tgt_indices, dtype=torch.long) 
         else:

@@ -623,7 +623,7 @@ def prepare_data(splits: List[str], max_len: int, min_count: int = 3, config: An
                     # Handle nested list structure for phonemes
                     if isinstance(en_indices, list) and len(en_indices) > 0:
                         if isinstance(en_indices[0], list):
-                            en_len = len(en_indices)
+                            en_len = sum(len(item) if isinstance(item, list) else 1 for item in en_indices)
                         else:
                             en_len = len(en_indices)
                     else:
@@ -638,6 +638,8 @@ def prepare_data(splits: List[str], max_len: int, min_count: int = 3, config: An
                             vi_len = len(vi_indices)
                         else:
                             vi_len = len(vi_indices)
+                    elif isinstance(vi_indices, torch.Tensor):
+                        vi_len = vi_indices.shape[0] if len(vi_indices.shape) > 0 else 0
                     else:
                         vi_len = 0
                 
