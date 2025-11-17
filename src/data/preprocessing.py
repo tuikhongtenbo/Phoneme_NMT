@@ -92,6 +92,41 @@ class BaseVocab:
         for word in preprocess_sentence(sentence):
             indices.append(self.word2index.get(word, unk_index))
         return indices
+    
+    def save(self, filepath: str):
+        """Save vocabulary to JSON file."""
+        vocab_data = {
+            'name': self.name,
+            'word2index': self.word2index,
+            'word2count': self.word2count,
+            'index2word': {str(k): v for k, v in self.index2word.items()},  # Convert int keys to str for JSON
+            'count': self.count,
+            'specials': self.specials,
+            'vocab_type': 'word_level'
+        }
+        os.makedirs(os.path.dirname(filepath) if os.path.dirname(filepath) else '.', exist_ok=True)
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(vocab_data, f, ensure_ascii=False, indent=2)
+        print(f"✓ Saved vocabulary to: {filepath}")
+    
+    @classmethod
+    def load(cls, filepath: str, name: str = None):
+        """Load vocabulary from JSON file."""
+        if not os.path.exists(filepath):
+            raise FileNotFoundError(f"Vocabulary file not found: {filepath}")
+        
+        with open(filepath, 'r', encoding='utf-8') as f:
+            vocab_data = json.load(f)
+        
+        vocab = cls(name or vocab_data.get('name', 'vocab'))
+        vocab.word2index = vocab_data['word2index']
+        vocab.word2count = vocab_data['word2count']
+        vocab.index2word = {int(k): v for k, v in vocab_data['index2word'].items()}  # Convert str keys back to int
+        vocab.count = vocab_data['count']
+        vocab.specials = vocab_data.get('specials', [PAD_TOKEN, SOS_TOKEN, EOS_TOKEN, UNK_TOKEN])
+        
+        print(f"✓ Loaded vocabulary from: {filepath} (size: {vocab.count})")
+        return vocab
         
 # --- Specific Vocab Classes ---
 
@@ -260,6 +295,55 @@ class EnPhonemeVocab:
         """Convert sentence to indices (for compatibility with word-level)."""
         phoneme_seqs = self.encode_caption(sentence)
         return [idx for seq in phoneme_seqs for idx in seq]
+    
+    def save(self, filepath: str):
+        """Save phoneme vocabulary to JSON file."""
+        vocab_data = {
+            'itos': self.itos,
+            'stoi': self.stoi,
+            'specials': self.specials,
+            'word_to_ipa': self.word_to_ipa if hasattr(self, 'word_to_ipa') else {},
+            'vocab_type': 'phoneme_level',
+            'vocab_size': self.vocab_size
+        }
+        os.makedirs(os.path.dirname(filepath) if os.path.dirname(filepath) else '.', exist_ok=True)
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(vocab_data, f, ensure_ascii=False, indent=2)
+        print(f"✓ Saved phoneme vocabulary to: {filepath}")
+    
+    @classmethod
+    def load(cls, filepath: str, config: Any = None):
+        """Load phoneme vocabulary from JSON file."""
+        if not os.path.exists(filepath):
+            raise FileNotFoundError(f"Vocabulary file not found: {filepath}")
+        
+        with open(filepath, 'r', encoding='utf-8') as f:
+            vocab_data = json.load(f)
+        
+        vocab = cls.__new__(cls)  # Create instance without calling __init__
+        vocab.itos = {int(k): v for k, v in vocab_data['itos'].items()}  # Convert str keys back to int
+        vocab.stoi = vocab_data['stoi']
+        vocab.specials = vocab_data.get('specials', [PAD_TOKEN, SOS_TOKEN, EOS_TOKEN, UNK_TOKEN])
+        
+        # Initialize special token indices
+        vocab.initialize_special_tokens()
+        
+        # Load word_to_ipa if available
+        if 'word_to_ipa' in vocab_data and vocab_data['word_to_ipa']:
+            vocab.word_to_ipa = vocab_data['word_to_ipa']
+        elif config:
+            # Try to load from config if not in saved data
+            try:
+                # Create a temporary instance to use load_ipa_mapping method
+                temp_vocab = cls(config)
+                vocab.word_to_ipa = temp_vocab.word_to_ipa
+            except:
+                vocab.word_to_ipa = {}
+        else:
+            vocab.word_to_ipa = {}
+        
+        print(f"✓ Loaded phoneme vocabulary from: {filepath} (size: {vocab.vocab_size})")
+        return vocab
 
 
 # --- Config Helpers ---
@@ -279,6 +363,37 @@ def create_vi_vocab_config(pydantic_config: Any) -> Any:
             self.data = pydantic_config.data if hasattr(pydantic_config, 'data') else None
     
     return ViVocabConfig(pydantic_config)
+
+
+# --- Vocabulary File Path Helpers ---
+
+def get_vocab_filepath(source_level: str, target_level: str, min_count: int = None, vocab_dir: str = "vocabs") -> Tuple[str, str]:
+    """
+    Generate vocabulary file paths based on source and target levels.
+    
+    Args:
+        source_level: 'word' or 'phoneme' for source (EN)
+        target_level: 'word' or 'phoneme' for target (VI)
+        min_count: Minimum word count (for word-level vocab filtering)
+        vocab_dir: Directory to save vocabularies
+        
+    Returns:
+        Tuple of (input_vocab_path, output_vocab_path)
+    """
+    os.makedirs(vocab_dir, exist_ok=True)
+    
+    # Create filename based on levels
+    source_suffix = "word" if source_level == 'word' else "phoneme"
+    target_suffix = "word" if target_level == 'word' else "phoneme"
+    
+    filename_suffix = f"en_{source_suffix}_vi_{target_suffix}"
+    if min_count and min_count > 1:
+        filename_suffix += f"_min{min_count}"
+    
+    input_vocab_path = os.path.join(vocab_dir, f"vocab_input_{filename_suffix}.json")
+    output_vocab_path = os.path.join(vocab_dir, f"vocab_output_{filename_suffix}.json")
+    
+    return input_vocab_path, output_vocab_path
 
 
 # --- MAIN DATA LOADING FUNCTIONS ---
@@ -365,42 +480,111 @@ def prepare_data(splits: List[str], max_len: int, min_count: int = 3, config: An
     print(f"Source (EN) tokenization level: **{source_level}**")
     print(f"Target (VI) tokenization level: **{target_level}**")
 
-    # 3. Build Source Vocabulary (EN)
-    if source_level == 'word':
-        input_vocab = EnWordVocab("en")
-        for en_sent, _ in all_raw_pairs['train']:
-            input_vocab.add_sentence(en_sent)
-        input_vocab.trim(min_count)
-        print(f"Input Vocab Size (EN Word): {input_vocab.count}")
-    elif source_level == 'phoneme':
-        input_vocab = EnPhonemeVocab(config)
-        print(f"Input Vocab Size (EN Phonemes): {input_vocab.vocab_size}")
-    else:
-        raise ValueError(f"Unknown source_level: {source_level}. Must be 'word' or 'phoneme'.")
+    # Get vocabulary file paths
+    input_vocab_path, output_vocab_path = get_vocab_filepath(
+        source_level, target_level, min_count
+    )
 
-    # 4. Build Target Vocabulary (VI)
-    if target_level == 'word':
-        output_vocab = ViWordLevelVocab(config)
-        for _, vi_sent in all_raw_pairs['train']:
-            output_vocab.add_sentence(vi_sent)
-        output_vocab.trim(min_count)
-        print(f"Output Vocab Size (VI Word): {output_vocab.count}")
-    elif target_level == 'phoneme':
+    # 3. Build or Load Source Vocabulary (EN)
+    if os.path.exists(input_vocab_path):
+        print(f"\nFound saved input vocabulary: {input_vocab_path}")
         try:
-            vi_vocab_config = create_vi_vocab_config(config)
-            output_vocab = ViWordVocab(vi_vocab_config)
-            print(f"Output Vocab Size (VI Phonemes): {output_vocab.vocab_size}")
+            if source_level == 'word':
+                input_vocab = EnWordVocab.load(input_vocab_path, name="en")
+            else:  # phoneme
+                input_vocab = EnPhonemeVocab.load(input_vocab_path, config)
+            print(f"✓ Loaded input vocabulary (size: {input_vocab.count if hasattr(input_vocab, 'count') else input_vocab.vocab_size})")
         except Exception as e:
-            print(f"❌ ERROR: Could not initialize ViWordVocab. Falling back to Word-level.")
-            print(f"Error details: {e}")
-            target_level = 'word'
+            print(f"⚠ Error loading vocabulary: {e}. Rebuilding...")
+            if source_level == 'word':
+                input_vocab = EnWordVocab("en")
+                for en_sent, _ in all_raw_pairs['train']:
+                    input_vocab.add_sentence(en_sent)
+                input_vocab.trim(min_count)
+                input_vocab.save(input_vocab_path)
+                print(f"Input Vocab Size (EN Word): {input_vocab.count}")
+            else:  # phoneme
+                input_vocab = EnPhonemeVocab(config)
+                input_vocab.save(input_vocab_path)
+                print(f"Input Vocab Size (EN Phonemes): {input_vocab.vocab_size}")
+    else:
+        print(f"\nBuilding input vocabulary (will save to: {input_vocab_path})")
+        if source_level == 'word':
+            input_vocab = EnWordVocab("en")
+            for en_sent, _ in all_raw_pairs['train']:
+                input_vocab.add_sentence(en_sent)
+            input_vocab.trim(min_count)
+            input_vocab.save(input_vocab_path)
+            print(f"Input Vocab Size (EN Word): {input_vocab.count}")
+        elif source_level == 'phoneme':
+            input_vocab = EnPhonemeVocab(config)
+            input_vocab.save(input_vocab_path)
+            print(f"Input Vocab Size (EN Phonemes): {input_vocab.vocab_size}")
+        else:
+            raise ValueError(f"Unknown source_level: {source_level}. Must be 'word' or 'phoneme'.")
+
+    # 4. Build or Load Target Vocabulary (VI)
+    if os.path.exists(output_vocab_path):
+        print(f"\nFound saved output vocabulary: {output_vocab_path}")
+        try:
+            if target_level == 'word':
+                output_vocab = ViWordLevelVocab.load(output_vocab_path, name='vi_word')
+            else:  # phoneme
+                vi_vocab_config = create_vi_vocab_config(config)
+                output_vocab = ViWordVocab.load(output_vocab_path, vi_vocab_config)
+            print(f"✓ Loaded output vocabulary (size: {output_vocab.count if hasattr(output_vocab, 'count') else output_vocab.vocab_size})")
+        except Exception as e:
+            print(f"⚠ Error loading vocabulary: {e}. Rebuilding...")
+            if target_level == 'word':
+                output_vocab = ViWordLevelVocab(config)
+                for _, vi_sent in all_raw_pairs['train']:
+                    output_vocab.add_sentence(vi_sent)
+                output_vocab.trim(min_count)
+                output_vocab.save(output_vocab_path)
+                print(f"Output Vocab Size (VI Word): {output_vocab.count}")
+            else:  # phoneme
+                try:
+                    vi_vocab_config = create_vi_vocab_config(config)
+                    output_vocab = ViWordVocab(vi_vocab_config)
+                    output_vocab.save(output_vocab_path)
+                    print(f"Output Vocab Size (VI Phonemes): {output_vocab.vocab_size}")
+                except Exception as e2:
+                    print(f"❌ ERROR: Could not initialize ViWordVocab. Falling back to Word-level.")
+                    print(f"Error details: {e2}")
+                    target_level = 'word'
+                    output_vocab = ViWordLevelVocab(config)
+                    for _, vi_sent in all_raw_pairs['train']:
+                        output_vocab.add_sentence(vi_sent)
+                    output_vocab.trim(min_count)
+                    output_vocab.save(output_vocab_path)
+                    print(f"Output Vocab Size (VI Word): {output_vocab.count}")
+    else:
+        print(f"\nBuilding output vocabulary (will save to: {output_vocab_path})")
+        if target_level == 'word':
             output_vocab = ViWordLevelVocab(config)
             for _, vi_sent in all_raw_pairs['train']:
                 output_vocab.add_sentence(vi_sent)
             output_vocab.trim(min_count)
+            output_vocab.save(output_vocab_path)
             print(f"Output Vocab Size (VI Word): {output_vocab.count}")
-    else:
-        raise ValueError(f"Unknown target_level: {target_level}. Must be 'word' or 'phoneme'.")
+        elif target_level == 'phoneme':
+            try:
+                vi_vocab_config = create_vi_vocab_config(config)
+                output_vocab = ViWordVocab(vi_vocab_config)
+                output_vocab.save(output_vocab_path)
+                print(f"Output Vocab Size (VI Phonemes): {output_vocab.vocab_size}")
+            except Exception as e:
+                print(f"❌ ERROR: Could not initialize ViWordVocab. Falling back to Word-level.")
+                print(f"Error details: {e}")
+                target_level = 'word'
+                output_vocab = ViWordLevelVocab(config)
+                for _, vi_sent in all_raw_pairs['train']:
+                    output_vocab.add_sentence(vi_sent)
+                output_vocab.trim(min_count)
+                output_vocab.save(output_vocab_path)
+                print(f"Output Vocab Size (VI Word): {output_vocab.count}")
+        else:
+            raise ValueError(f"Unknown target_level: {target_level}. Must be 'word' or 'phoneme'.")
 
     # 5. Convert to indices and filter
     print("\nConverting sentences to indices...")

@@ -158,6 +158,63 @@ class ViWordVocab:
         ]
 
         return captions
+    
+    def save(self, filepath: str):
+        """Save Vietnamese phoneme vocabulary to JSON file."""
+        vocab_data = {
+            'itos': {str(k): v for k, v in self.itos.items()},  # Convert int keys to str for JSON
+            'stoi': self.stoi,
+            'specials': self.specials,
+            'tokenizer': self.tokenizer,
+            'vocab_type': 'vietnamese_phoneme',
+            'vocab_size': self.vocab_size,
+            'padding_token': self.padding_token,
+            'bos_token': self.bos_token,
+            'eos_token': self.eos_token,
+            'unk_token': self.unk_token
+        }
+        os.makedirs(os.path.dirname(filepath) if os.path.dirname(filepath) else '.', exist_ok=True)
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(vocab_data, f, ensure_ascii=False, indent=2)
+        print(f"✓ Saved Vietnamese phoneme vocabulary to: {filepath}")
+    
+    @classmethod
+    def load(cls, filepath: str, config: Any = None):
+        """Load Vietnamese phoneme vocabulary from JSON file."""
+        if not os.path.exists(filepath):
+            raise FileNotFoundError(f"Vocabulary file not found: {filepath}")
+        
+        with open(filepath, 'r', encoding='utf-8') as f:
+            vocab_data = json.load(f)
+        
+        # Create a minimal config if not provided
+        if config is None:
+            class MinimalConfig:
+                PAD_TOKEN = vocab_data.get('padding_token', '<PAD>')
+                BOS_TOKEN = vocab_data.get('bos_token', '<SOS>')
+                EOS_TOKEN = vocab_data.get('eos_token', '<EOS>')
+                UNK_TOKEN = vocab_data.get('unk_token', '<UNK>')
+                TOKENIZER = vocab_data.get('tokenizer', 'word')
+            config = MinimalConfig()
+        
+        vocab = cls.__new__(cls)  # Create instance without calling __init__
+        vocab.tokenizer = vocab_data.get('tokenizer', 'word')
+        vocab.itos = {int(k): v for k, v in vocab_data['itos'].items()}  # Convert str keys back to int
+        vocab.stoi = vocab_data['stoi']
+        vocab.specials = vocab_data.get('specials', [])
+        
+        # Initialize special tokens from saved data
+        vocab.padding_token = vocab_data.get('padding_token', config.PAD_TOKEN)
+        vocab.bos_token = vocab_data.get('bos_token', config.BOS_TOKEN)
+        vocab.eos_token = vocab_data.get('eos_token', config.EOS_TOKEN)
+        vocab.unk_token = vocab_data.get('unk_token', config.UNK_TOKEN)
+        vocab.padding_idx = 0
+        vocab.bos_idx = 1
+        vocab.eos_idx = 2
+        vocab.unk_idx = 3
+        
+        print(f"✓ Loaded Vietnamese phoneme vocabulary from: {filepath} (size: {vocab.vocab_size})")
+        return vocab
 
 
 if __name__ == "__main__":
