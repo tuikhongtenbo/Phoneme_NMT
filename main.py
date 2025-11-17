@@ -144,8 +144,7 @@ def main():
     output_vocab = data_result['output_vocab']
     indexed_data = data_result['data']
     target_level = data_result['target_level']
-    
-    src_vocab_size = input_vocab.count
+    src_vocab_size = input_vocab.vocab_size if hasattr(input_vocab, 'vocab_size') else input_vocab.count
     tgt_vocab_size = output_vocab.vocab_size if hasattr(output_vocab, 'vocab_size') else output_vocab.count
     
     logger.info(f"Source vocabulary size: {src_vocab_size}")
