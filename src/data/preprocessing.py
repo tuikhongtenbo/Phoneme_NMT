@@ -3,6 +3,7 @@
 from typing import List, Dict, Tuple, Any, Optional
 import os
 import torch
+import sys
 import json
 from tqdm import tqdm
 from collections import Counter
@@ -402,39 +403,91 @@ def prepare_data(splits: List[str], max_len: int, min_count: int = 3, config: An
         raise ValueError(f"Unknown target_level: {target_level}. Must be 'word' or 'phoneme'.")
 
     # 5. Convert to indices and filter
+    print("\nConverting sentences to indices...")
+    sys.stdout.flush()  # Ensure output is visible immediately
+    
     indexed_data = {}
     
     for split, pairs in all_raw_pairs.items():
+        print(f"\nProcessing {split} split ({len(pairs):,} pairs)...")
+        sys.stdout.flush()
         current_indexed_pairs = []
-        for en_sent, vi_sent in pairs:
-            # Source (EN)
-            if source_level == 'word':
-                en_indices = [input_vocab.bos_idx] + input_vocab.sentence_to_indices(en_sent) + [input_vocab.eos_idx]
-            else:  # phoneme
-                en_indices = input_vocab.encode_caption(en_sent)
-            
-            # Target (VI)
-            vi_words = preprocess_sentence(vi_sent)
-            vi_indices = output_vocab.encode_caption(vi_words)
-            
-            # Calculate lengths for filtering
-            if source_level == 'word':
-                en_len = len(en_indices)
-            else:  # phoneme
-                en_len = len(en_indices) if isinstance(en_indices[0], list) else len(en_indices)
-            
-            if target_level == 'word':
-                vi_len = len(vi_indices)
-            else:  # phoneme
-                vi_len = len(vi_indices) if isinstance(vi_indices[0], list) else len(vi_indices)
-            
-            # Filter by length
-            if en_len <= max_len and vi_len <= max_len:
-                current_indexed_pairs.append((en_indices, vi_indices))
         
+        # Use tqdm with explicit file parameter for better compatibility
+        progress_bar = tqdm(pairs, desc=f"Encoding {split}", file=sys.stdout, mininterval=1.0, ncols=100)
+        
+        for idx, (en_sent, vi_sent) in enumerate(progress_bar):
+            try:
+                # Source (EN)
+                if source_level == 'word':
+                    en_indices = [input_vocab.bos_idx] + input_vocab.sentence_to_indices(en_sent) + [input_vocab.eos_idx]
+                else:  # phoneme
+                    en_indices = input_vocab.encode_caption(en_sent)
+                
+                # Target (VI)
+                vi_words = preprocess_sentence(vi_sent)
+                vi_indices = output_vocab.encode_caption(vi_words)
+                
+                # Handle tensor return type for Vietnamese phonemes
+                if isinstance(vi_indices, torch.Tensor):
+                    vi_indices = vi_indices.tolist()
+                
+                # Calculate lengths for filtering
+                if source_level == 'word':
+                    en_len = len(en_indices)
+                else:  # phoneme
+                    # Handle nested list structure for phonemes
+                    if isinstance(en_indices, list) and len(en_indices) > 0:
+                        if isinstance(en_indices[0], list):
+                            en_len = len(en_indices)
+                        else:
+                            en_len = len(en_indices)
+                    else:
+                        en_len = 0
+                
+                if target_level == 'word':
+                    vi_len = len(vi_indices)
+                else:  # phoneme
+                    # Handle nested list structure for phonemes
+                    if isinstance(vi_indices, list) and len(vi_indices) > 0:
+                        if isinstance(vi_indices[0], list):
+                            vi_len = len(vi_indices)
+                        else:
+                            vi_len = len(vi_indices)
+                    else:
+                        vi_len = 0
+                
+                # Filter by length
+                if en_len <= max_len and vi_len <= max_len:
+                    current_indexed_pairs.append((en_indices, vi_indices))
+                
+                # Update progress bar every 1000 items
+                if (idx + 1) % 1000 == 0:
+                    progress_bar.set_postfix({
+                        'processed': f'{idx+1:,}/{len(pairs):,}',
+                        'kept': f'{len(current_indexed_pairs):,}'
+                    })
+                    
+            except Exception as e:
+                if idx < 10:  
+                    print(f"Warning: Error processing pair {idx}: {e}")
+                continue
+        
+        progress_bar.close()
         indexed_data[split] = current_indexed_pairs
-        print(f"Indexed {split} pairs: {len(current_indexed_pairs)}")
-        
+        print(f"✓ Indexed {split}: {len(current_indexed_pairs):,} pairs kept out of {len(pairs):,} total")
+        sys.stdout.flush()
+    
+    print("\n" + "="*60)
+    print("Data preparation completed!")
+    print("="*60)
+    total_pairs = sum(len(pairs) for pairs in indexed_data.values())
+    print(f"Total indexed pairs across all splits: {total_pairs:,}")
+    for split, pairs in indexed_data.items():
+        print(f"  {split}: {len(pairs):,} pairs")
+    print("="*60 + "\n")
+    sys.stdout.flush()
+    
     return {
         'input_vocab': input_vocab,
         'output_vocab': output_vocab,
