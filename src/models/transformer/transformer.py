@@ -213,7 +213,7 @@ class Transformer(BaseModel):
         """
         trg_pad_mask = (trg != self.tgt_pad_idx).unsqueeze(1).unsqueeze(3)
         trg_len = trg.shape[1]
-        trg_sub_mask = torch.tril(torch.ones(trg_len, trg_len, device=trg.device, dtype=torch.bool))
+        trg_sub_mask = torch.tril(torch.ones(trg_len, trg_len, device=trg.device)).bool()
         trg_mask = trg_pad_mask & trg_sub_mask
         return trg_mask
     
@@ -232,48 +232,23 @@ class Transformer(BaseModel):
                 Shape: (batch_size, src_len)
             tgt_seq: Target sequence
                 Shape: (batch_size, tgt_len)
-            src_mask: Source padding mask (batch_size, src_len) or 3D mask
-                True for valid tokens, False for padding
-            tgt_mask: Target mask (batch_size, tgt_len) or 3D mask
-                True for valid tokens, False for padding
+            src_mask: Source mask (optional, will be created if None)
+            tgt_mask: Target mask (optional, will be created if None)
         
         Returns:
             output: Model predictions
                 Shape: (batch_size, tgt_len, tgt_vocab_size)
         """
-        # Create masks (similar to reference implementation)
+        # Create masks (exactly like reference implementation)
         if src_mask is None:
             src_mask = self.make_src_mask(src_seq)
-        else:
-            # Convert to 2D first if needed
-            if src_mask.dim() == 2:
-                src_mask = self.make_src_mask(src_seq) 
-            elif src_mask.dim() == 3:
-                # (B, L, L) -> extract first row and convert to (B, 1, 1, L)
-                src_mask_2d = src_mask[:, 0, :]  # (B, L)
-                src_mask = src_mask_2d.unsqueeze(1).unsqueeze(2)  # (B, 1, 1, L)
-            elif src_mask.dim() == 4:
-                # Already in correct format, but ensure shape
-                if src_mask.size(2) == 1:
-                    pass  # Already (B, 1, 1, L)
-                else:
-                    src_mask = src_mask[:, :, :1, :]  # Take first row
-        
         if tgt_mask is None:
             tgt_mask = self.make_trg_mask(tgt_seq)
-        else:
-            # Convert to correct format
-            if tgt_mask.dim() == 2:
-                tgt_mask = self.make_trg_mask(tgt_seq)  # Use make_trg_mask for consistency
-            elif tgt_mask.dim() == 3:
-                tgt_mask = tgt_mask.unsqueeze(1)  # (B, T, T) -> (B, 1, T, T)
-            elif tgt_mask.dim() == 4:
-                pass
         
         # Encode
         enc_src = self.encoder(src_seq, src_mask)
         
-        # Decode (src_mask shape (B, 1, 1, L) will broadcast to (B, 1, T, L) for cross-attention)
+        # Decode
         output = self.decoder(tgt_seq, enc_src, tgt_mask, src_mask)
         
         return output

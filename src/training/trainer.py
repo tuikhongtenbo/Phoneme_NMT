@@ -223,27 +223,16 @@ class Trainer:
         tgt_input = tgt_seq[:, :-1]  # Remove last token
         tgt_output = tgt_seq[:, 1:]   # Remove first token (SOS)
         
-        # Create look-ahead mask for transformer decoder
+        # For transformer, let model create masks internally (like reference implementation)
+        # Transformer needs full tgt_seq (with SOS) to create mask correctly
+        # For LSTM, pass padding masks
         if self.config.model.name == "transformer":
-            tgt_len = tgt_input.size(1)
-            look_ahead = self._create_look_ahead_mask(tgt_len).to(self.device)  # (tgt_len, tgt_len)
-            # Get padding mask for tgt_input (after removing last token)
-            tgt_padding_mask = tgt_mask[:, 1:]  # (batch, tgt_len-1)
-            
-            # Combine: (tgt_len, tgt_len) & (batch, tgt_len-1) -> (batch, tgt_len-1, tgt_len-1)
-            tgt_padding_expanded = tgt_padding_mask.unsqueeze(1) & tgt_padding_mask.unsqueeze(2)  # (batch, tgt_len-1, tgt_len-1)
-            tgt_mask_combined = look_ahead.unsqueeze(0) & tgt_padding_expanded  # (batch, tgt_len-1, tgt_len-1)
-            
-            # Reshape to (batch, 1, tgt_len-1, tgt_len-1) for transformer
-            tgt_mask_combined = tgt_mask_combined.unsqueeze(1)  # (batch, 1, tgt_len-1, tgt_len-1)
-            
-            # Reshape src_mask to (batch, 1, 1, src_len) for transformer
-            src_mask_reshaped = src_mask.unsqueeze(1).unsqueeze(2)  # (batch, 1, 1, src_len)
+            # Transformer will create masks from full sequences in forward()
+            # Pass full tgt_seq (with SOS) and None masks to let model handle mask creation
+            return src_seq, tgt_seq, tgt_output, (None, None)
         else:
-            tgt_mask_combined = tgt_mask[:, 1:]  # For LSTM, just padding mask
-            src_mask_reshaped = src_mask
-        
-        return src_seq, tgt_input, tgt_output, (src_mask_reshaped, tgt_mask_combined)
+            # For LSTM, pass padding masks
+            return src_seq, tgt_input, tgt_output, (src_mask, tgt_mask[:, 1:])
     
     def train_step(self, batch: Tuple[torch.Tensor, torch.Tensor]) -> Dict[str, float]:
         """
@@ -264,8 +253,18 @@ class Trainer:
         # Forward pass
         logits = self.model(src_seq, tgt_input, src_mask=src_mask, tgt_mask=tgt_mask)
         
+        # For transformer: logits shape is (batch, tgt_len, vocab) where tgt_len includes SOS
+        # tgt_output is tgt_seq[:, 1:] (no SOS), so we need to align
+        if self.config.model.name == "transformer":
+            # logits[:, :-1] predicts tokens at positions [1, 2, ..., N] (excluding last)
+            # This aligns with tgt_output which is tgt_seq[:, 1:] (excluding SOS)
+            logits_for_loss = logits[:, :-1, :].reshape(-1, logits.size(-1))
+        else:
+            # For LSTM, shapes already align
+            logits_for_loss = logits.reshape(-1, logits.size(-1))
+        
         # Calculate loss
-        loss = self.criterion(logits.reshape(-1, logits.size(-1)), tgt_output.reshape(-1))
+        loss = self.criterion(logits_for_loss, tgt_output.reshape(-1))
         
         # Backward pass
         loss.backward()
