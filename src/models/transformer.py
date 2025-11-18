@@ -361,9 +361,35 @@ class TransformerModel(BaseModel):
         Returns:
             combined_mask: Combined mask (batch, tgt_len, src_len)
         """
-        # (B, T, 1) & (B, 1, L) -> (B, T, L)
-        mask = tgt_padding_mask.unsqueeze(2) & src_padding_mask.unsqueeze(1)
-        return mask.to(dtype=torch.bool)
+        # Ensure both masks are 2D and have same batch size
+        if tgt_padding_mask.dim() != 2:
+            raise ValueError(f"tgt_padding_mask must be 2D, got {tgt_padding_mask.dim()}D")
+        if src_padding_mask.dim() != 2:
+            raise ValueError(f"src_padding_mask must be 2D, got {src_padding_mask.dim()}D")
+        
+        batch_size = tgt_padding_mask.size(0)
+        tgt_len = tgt_padding_mask.size(1)
+        src_len = src_padding_mask.size(1)
+        
+        if src_padding_mask.size(0) != batch_size:
+            raise ValueError(
+                f"Batch size mismatch: tgt_padding_mask has batch_size={batch_size}, "
+                f"src_padding_mask has batch_size={src_padding_mask.size(0)}"
+            )
+        
+        # Ensure boolean dtype
+        tgt_padding_mask = tgt_padding_mask.to(dtype=torch.bool)
+        src_padding_mask = src_padding_mask.to(dtype=torch.bool)
+        
+        # (B, T) -> (B, T, 1)
+        tgt_expanded = tgt_padding_mask.unsqueeze(2)  # (B, T, 1)
+        # (B, L) -> (B, 1, L)
+        src_expanded = src_padding_mask.unsqueeze(1)  # (B, 1, L)
+        
+        # Broadcast: (B, T, 1) & (B, 1, L) -> (B, T, L)
+        mask = tgt_expanded & src_expanded
+        
+        return mask
     
     def forward(
         self,
@@ -403,19 +429,40 @@ class TransformerModel(BaseModel):
             tgt_mask = tgt_mask.to(device=device, dtype=torch.bool)
             tgt_len = tgt_seq.size(1)
             
-            # (B, T, T)
-            tgt_padding_mask_3d = self.create_padding_mask(tgt_mask)
-            
-            # (T, T)
-            look_ahead_mask = self.create_look_ahead_mask(tgt_len, device=device)
-            
-            # (B, T, T) & (T, T) -> (B, T, T)
-            tgt_self_attention_mask = tgt_padding_mask_3d & look_ahead_mask.unsqueeze(0)
+            # Handle both 2D and 3D tgt_mask for backward compatibility with trainer
+            if tgt_mask.dim() == 3:
+                # Already 3D combined mask (B, T, T) from trainer
+                tgt_self_attention_mask = tgt_mask
+            elif tgt_mask.dim() == 2:
+                # 2D padding mask (B, T) 
+                # (B, T, T)
+                tgt_padding_mask_3d = self.create_padding_mask(tgt_mask)
+                
+                # (T, T)
+                look_ahead_mask = self.create_look_ahead_mask(tgt_len, device=device)
+                
+                # (B, T, T) & (T, T) -> (B, T, T)
+                tgt_self_attention_mask = tgt_padding_mask_3d & look_ahead_mask.unsqueeze(0)
+            else:
+                raise ValueError(f"tgt_mask must be 2D or 3D, got {tgt_mask.dim()}D")
             
         # 3. Decoder cross-attention mask (B, T, L)
         cross_attention_mask = None
         if src_mask is not None and tgt_mask is not None:
-            cross_attention_mask = self.create_cross_attention_mask(tgt_mask, src_mask)
+            # Handle both 2D and 3D tgt_mask for backward compatibility with trainer
+            if tgt_mask.dim() == 3:
+                tgt_mask_2d = tgt_mask[:, 0, :]  # (B, T) - mask for query position 0
+            elif tgt_mask.dim() == 2:
+                tgt_mask_2d = tgt_mask  # Already 2D (B, T)
+            else:
+                raise ValueError(f"tgt_mask must be 2D or 3D, got {tgt_mask.dim()}D")
+            
+            # Ensure tgt_mask_2d is 2D and has correct dtype/device
+            tgt_mask_2d = tgt_mask_2d.to(device=device, dtype=torch.bool)
+            if tgt_mask_2d.dim() != 2:
+                raise ValueError(f"tgt_mask_2d must be 2D after processing, got {tgt_mask_2d.dim()}D")
+            
+            cross_attention_mask = self.create_cross_attention_mask(tgt_mask_2d, src_mask)
         
         # Source embeddings with positional encoding
         src_embedded = self.src_embedding(src_seq)
