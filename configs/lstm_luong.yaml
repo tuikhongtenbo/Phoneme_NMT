@@ -9,8 +9,8 @@ model:
   attention_type: "general"  # Luong attention types: general, dot, concat
 
 training:
-  batch_size: 128
-  num_epochs: 50
+  batch_size: 16
+  num_epochs: 10
   learning_rate: 0.001
   optimizer: "adam"
   scheduler: "cosine"
@@ -27,8 +27,8 @@ data:
   unk_id: 3
   
   # Target level: 'word' or 'phoneme'
-  target_level: "phoneme"
-  source_level: "phoneme"
+  target_level: "word"
+  source_level: "word"
   
   # Direct paths to training data files
   train_src: "/kaggle/input/phomt/train_end_clean.en"
