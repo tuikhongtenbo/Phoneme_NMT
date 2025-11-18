@@ -167,63 +167,6 @@ python main.py --config configs/transformer.yaml \
 | `--seed` | int | Random seed for reproducibility (overrides config) | None |
 | `--resume` | str | Path to checkpoint file to resume training | None |
 
-
-## Configuration
-
-### Configuration File Structure
-
-Each YAML configuration file follows this structure:
-
-```yaml
-model:
-  name: "transformer"              # Model name: "transformer", "lstm_bahdanau", or "lstm_luong"
-  embed_dim: 512                   # Embedding dimension
-  hidden_dim: 512                  # Hidden dimension (for LSTM)
-  num_layers: 6                    # Number of layers
-  dropout: 0.1                     # Dropout rate
-  num_heads: 8                     # Number of attention heads (Transformer only)
-  ff_dim: 2048                     # Feed-forward dimension (Transformer only)
-  attention_type: "general"        # Attention type (LSTM Luong only: "general", "dot", "concat")
-
-training:
-  batch_size: 8                    # Batch size
-  num_epochs: 10                   # Number of epochs
-  learning_rate: 0.001             # Learning rate
-  optimizer: "adamw"               # Optimizer: "adam", "sgd", or "adamw"
-  scheduler: "cosine"              # Learning rate scheduler
-  clip_grad_norm: 5.0              # Gradient clipping threshold
-  warmup_steps: 4000               # Warmup steps (Transformer only)
-  eval_every: 1000                 # Evaluation frequency (steps)
-  save_every: 5000                 # Checkpoint saving frequency (steps)
-
-data:
-  # Special token IDs
-  sos_id: 1                        # Start-of-sequence token ID
-  eos_id: 2                        # End-of-sequence token ID
-  pad_id: 0                        # Padding token ID
-  unk_id: 3                        # Unknown token ID
-  
-  # Processing level (must match for source and target)
-  source_level: "word"              # Source level: "word" or "phoneme"
-  target_level: "word"              # Target level: "word" or "phoneme" (must match source_level)
-  
-  # Data file paths
-  train_src: "path/to/train.en"
-  train_tgt: "path/to/train.vi"
-  dev_src: "path/to/dev.en"
-  dev_tgt: "path/to/dev.vi"
-  test_src: "path/to/test.en"
-  test_tgt: "path/to/test.vi"
-  
-  # Vocabulary settings
-  vocab_json_train: "path/to/vocab.json"  # For phoneme-level processing
-  min_count: 3                     # Minimum word count for vocabulary
-  max_seq_len: 64                  # Maximum sequence length
-
-device: "cuda"                     # Device: "cuda" or "cpu"
-seed: 42                           # Random seed
-```
-
 ## Evaluation Metrics
 
 All models are evaluated using standard NMT metrics at both **word-level** and **phoneme-level**:
@@ -233,15 +176,6 @@ All models are evaluated using standard NMT metrics at both **word-level** and *
 - **METEOR**: METEOR score
 
 Metrics are computed automatically during validation and can be logged for analysis.
-
-## Processing Levels
-
-The project supports two processing levels:
-
-- **Word-level**: Translation at word granularity (word → word)
-- **Phoneme-level**: Translation at phoneme granularity (phoneme → phoneme)
-
-**Important Note:** `source_level` and `target_level` must match. The project does not support mixed-level translation (e.g., word → phoneme or phoneme → word). Both source and target must use the same level.
 
 ## 📚 References
 
