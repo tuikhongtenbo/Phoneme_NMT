@@ -211,9 +211,12 @@ class Transformer(BaseModel):
             trg_mask: Target mask
                 Shape: (batch_size, 1, tgt_len, tgt_len)
         """
-        trg_pad_mask = (trg != self.tgt_pad_idx).unsqueeze(1).unsqueeze(3)
+        # CRITICAL FIX: unsqueeze(2) not unsqueeze(3) to mask in Key dimension
+        # Shape: (Batch, 1, 1, tgt_len) - "At any position i, don't attend to position j if j is padding"
+        trg_pad_mask = (trg != self.tgt_pad_idx).unsqueeze(1).unsqueeze(2)  # (B, 1, 1, L)
         trg_len = trg.shape[1]
-        trg_sub_mask = torch.tril(torch.ones(trg_len, trg_len, device=trg.device)).bool()
+        trg_sub_mask = torch.tril(torch.ones(trg_len, trg_len, device=trg.device)).bool()  # (L, L)
+        # Broadcasting: (B, 1, 1, L) & (L, L) -> (B, 1, L, L)
         trg_mask = trg_pad_mask & trg_sub_mask
         return trg_mask
     
@@ -242,8 +245,21 @@ class Transformer(BaseModel):
         # Create masks (exactly like reference implementation)
         if src_mask is None:
             src_mask = self.make_src_mask(src_seq)
+        elif src_mask.dim() == 2:
+            # Convert 2D mask to 4D format: (B, L) -> (B, 1, 1, L)
+            src_mask = src_mask.to(dtype=torch.bool).unsqueeze(1).unsqueeze(2)
+        elif src_mask.dim() == 4:
+            # Ensure bool dtype
+            src_mask = src_mask.to(dtype=torch.bool)
+        
         if tgt_mask is None:
             tgt_mask = self.make_trg_mask(tgt_seq)
+        elif tgt_mask.dim() == 2:
+            # Convert 2D mask to 4D format using make_trg_mask logic
+            tgt_mask = self.make_trg_mask(tgt_seq)  # Recreate from sequence to ensure correct format
+        elif tgt_mask.dim() == 4:
+            # Ensure bool dtype
+            tgt_mask = tgt_mask.to(dtype=torch.bool)
         
         # Encode
         enc_src = self.encoder(src_seq, src_mask)

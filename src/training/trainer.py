@@ -109,18 +109,22 @@ class Trainer:
         optimizer_type = self.config.training.optimizer.lower()
         
         if optimizer_type == "adam":
+            # Use Transformer-recommended betas for better convergence
+            betas = (0.9, 0.98) if self.config.model.name == "transformer" else (0.9, 0.999)
             return optim.Adam(
                 self.model.parameters(),
                 lr=self.learning_rate,
-                betas=(0.9, 0.999),
-                eps=1e-8
+                betas=betas,
+                eps=1e-9
             )
         elif optimizer_type == "adamw":
+            # Use Transformer-recommended betas for better convergence
+            betas = (0.9, 0.98) if self.config.model.name == "transformer" else (0.9, 0.999)
             return optim.AdamW(
                 self.model.parameters(),
                 lr=self.learning_rate,
-                betas=(0.9, 0.999),
-                eps=1e-8,
+                betas=betas,
+                eps=1e-9,
                 weight_decay=0.01
             )
         elif optimizer_type == "sgd":
@@ -224,12 +228,10 @@ class Trainer:
         tgt_output = tgt_seq[:, 1:]   # Remove first token (SOS)
         
         # For transformer, let model create masks internally (like reference implementation)
-        # Transformer needs full tgt_seq (with SOS) to create mask correctly
-        # For LSTM, pass padding masks
         if self.config.model.name == "transformer":
-            # Transformer will create masks from full sequences in forward()
-            # Pass full tgt_seq (with SOS) and None masks to let model handle mask creation
-            return src_seq, tgt_seq, tgt_output, (None, None)
+            # Transformer will create masks from tgt_input in forward()
+            # Pass tgt_input (without EOS) and None masks to let model handle mask creation
+            return src_seq, tgt_input, tgt_output, (None, None)
         else:
             # For LSTM, pass padding masks
             return src_seq, tgt_input, tgt_output, (src_mask, tgt_mask[:, 1:])
@@ -253,18 +255,14 @@ class Trainer:
         # Forward pass
         logits = self.model(src_seq, tgt_input, src_mask=src_mask, tgt_mask=tgt_mask)
         
-        # For transformer: logits shape is (batch, tgt_len, vocab) where tgt_len includes SOS
-        # tgt_output is tgt_seq[:, 1:] (no SOS), so we need to align
-        if self.config.model.name == "transformer":
-            # logits[:, :-1] predicts tokens at positions [1, 2, ..., N] (excluding last)
-            # This aligns with tgt_output which is tgt_seq[:, 1:] (excluding SOS)
-            logits_for_loss = logits[:, :-1, :].reshape(-1, logits.size(-1))
-        else:
-            # For LSTM, shapes already align
-            logits_for_loss = logits.reshape(-1, logits.size(-1))
+        # Now that pass tgt_input (without EOS) to transformer:
+        # - logits shape: (batch, tgt_len-1, vocab) - predictions for positions [1, 2, ..., N]
+        # - tgt_output shape: (batch, tgt_len-1) - targets [tok1, tok2, ..., tokN, EOS]
+        logits_flat = logits.reshape(-1, logits.size(-1))
+        tgt_output_flat = tgt_output.reshape(-1)
         
         # Calculate loss
-        loss = self.criterion(logits_for_loss, tgt_output.reshape(-1))
+        loss = self.criterion(logits_flat, tgt_output_flat)
         
         # Backward pass
         loss.backward()
