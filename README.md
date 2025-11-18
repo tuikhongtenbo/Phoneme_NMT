@@ -224,19 +224,6 @@ device: "cuda"                     # Device: "cuda" or "cpu"
 seed: 42                           # Random seed
 ```
 
-### Using Configuration in Code
-
-```python
-from configs.config import Config
-
-# Load configuration from YAML file
-config = Config.from_yaml('configs/transformer.yaml')
-
-# Access configuration values using dot notation
-print(config.model.embed_dim)
-print(config.training.batch_size)
-print(config.data.source_level)
-
 ## Evaluation Metrics
 
 All models are evaluated using standard NMT metrics at both **word-level** and **phoneme-level**:
