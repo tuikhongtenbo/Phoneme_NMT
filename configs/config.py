@@ -54,9 +54,22 @@ class DataConfig(BaseModel):
     pad_id: int = Field(0, description="Padding token ID")
     unk_id: int = Field(3, description="Unknown token ID")
     
-    # Source and Target levels: 'word' or 'phoneme'
-    source_level: Literal["word", "phoneme"] = Field("word", description="Source sequence level: word or phoneme")
-    target_level: Literal["word", "phoneme"] = Field("phoneme", description="Target sequence level: word or phoneme")
+    # Level: 'word' or 'phoneme' (applies to both source and target)
+    source_level: Literal["word", "phoneme"] = Field("word", description="Sequence level: word or phoneme (applies to both source and target)")
+    target_level: Literal["word", "phoneme"] = Field("word", description="Sequence level: word or phoneme (should match source_level)")
+    
+    @validator('target_level')
+    def validate_levels_match(cls, v, values):
+        """Ensure source_level and target_level match (only word or phoneme, not mixed)"""
+        if 'source_level' in values:
+            source_level = values.get('source_level')
+            if v != source_level:
+                raise ValueError(
+                    f"source_level and target_level must match. "
+                    f"Got source_level={source_level}, target_level={v}. "
+                    f"Only 'word' or 'phoneme' level is supported (not mixed)."
+                )
+        return v
     
     # Direct paths to training data files
     train_src: str = Field(..., description="Direct path to training source data file (.en)")
