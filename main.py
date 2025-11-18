@@ -12,7 +12,7 @@ from pathlib import Path
 from configs.config import Config
 from src.data.preprocessing import prepare_data
 from src.data.data_loader import create_data_loader
-from src.models.transformer.transformer import TransformerModel
+from src.models.transformer import TransformerModel
 from src.models.lstm import LSTMBahdanau, LSTMLuong
 from src.training.trainer import Trainer
 from src.utils.logger import setup_logger
