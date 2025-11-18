@@ -226,14 +226,24 @@ class Trainer:
         # Create look-ahead mask for transformer decoder
         if self.config.model.name == "transformer":
             tgt_len = tgt_input.size(1)
-            look_ahead = self._create_look_ahead_mask(tgt_len).to(self.device)
-            # Combine with padding mask
-            tgt_padding_mask = tgt_mask[:, 1:].unsqueeze(1)  # (batch, 1, tgt_len-1)
-            tgt_mask_combined = look_ahead.unsqueeze(0) & tgt_padding_mask  # (batch, tgt_len-1, tgt_len-1)
+            look_ahead = self._create_look_ahead_mask(tgt_len).to(self.device)  # (tgt_len, tgt_len)
+            # Get padding mask for tgt_input (after removing last token)
+            tgt_padding_mask = tgt_mask[:, 1:]  # (batch, tgt_len-1)
+            
+            # Combine: (tgt_len, tgt_len) & (batch, tgt_len-1) -> (batch, tgt_len-1, tgt_len-1)
+            tgt_padding_expanded = tgt_padding_mask.unsqueeze(1) & tgt_padding_mask.unsqueeze(2)  # (batch, tgt_len-1, tgt_len-1)
+            tgt_mask_combined = look_ahead.unsqueeze(0) & tgt_padding_expanded  # (batch, tgt_len-1, tgt_len-1)
+            
+            # Reshape to (batch, 1, tgt_len-1, tgt_len-1) for transformer
+            tgt_mask_combined = tgt_mask_combined.unsqueeze(1)  # (batch, 1, tgt_len-1, tgt_len-1)
+            
+            # Reshape src_mask to (batch, 1, 1, src_len) for transformer
+            src_mask_reshaped = src_mask.unsqueeze(1).unsqueeze(2)  # (batch, 1, 1, src_len)
         else:
             tgt_mask_combined = tgt_mask[:, 1:]  # For LSTM, just padding mask
+            src_mask_reshaped = src_mask
         
-        return src_seq, tgt_input, tgt_output, (src_mask, tgt_mask_combined)
+        return src_seq, tgt_input, tgt_output, (src_mask_reshaped, tgt_mask_combined)
     
     def train_step(self, batch: Tuple[torch.Tensor, torch.Tensor]) -> Dict[str, float]:
         """

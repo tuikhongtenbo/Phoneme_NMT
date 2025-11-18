@@ -90,6 +90,20 @@ class Transformer(BaseModel):
         self.tied_embeddings = config.get("model.tied_embeddings", False)
         if self.tied_embeddings:
             self._apply_tied_embeddings()
+        
+        # Initialize weights
+        self._init_weights()
+    
+    def _init_weights(self):
+        """Initialize model weights using Xavier uniform initialization."""
+        for module in self.modules():
+            if isinstance(module, nn.Linear):
+                nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.constant_(module.bias, 0.0)
+            elif isinstance(module, nn.LayerNorm):
+                nn.init.constant_(module.bias, 0.0)
+                nn.init.constant_(module.weight, 1.0)
     
     def _apply_tied_embeddings(self):
         """Apply weight tying between target embedding and output projection."""
