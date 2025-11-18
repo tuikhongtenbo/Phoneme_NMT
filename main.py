@@ -12,7 +12,8 @@ from pathlib import Path
 from configs.config import Config
 from src.data.preprocessing import prepare_data
 from src.data.data_loader import create_data_loader
-from src.models import TransformerModel, LSTMBahdanau, LSTMLuong
+from src.models.transformer.transformer import TransformerModel
+from src.models.lstm import LSTMBahdanau, LSTMLuong
 from src.training.trainer import Trainer
 from src.utils.logger import setup_logger
 
@@ -100,6 +101,25 @@ def main():
         default=None,
         help="Random seed (uses config seed if not provided)"
     )
+    parser.add_argument(
+        "--batch_size",
+        type=int,
+        default=None,
+        help="Batch size (overrides config)"
+    )
+    parser.add_argument(
+        "--num_epochs",
+        type=int,
+        default=None,
+        help="Number of epochs (overrides config)"
+    )
+    parser.add_argument(
+        "--level",
+        type=str,
+        choices=["word", "phoneme"],
+        default=None,
+        help="Sequence level: 'word' or 'phoneme' (overrides config)"
+    )
     
     args = parser.parse_args()
     
@@ -109,6 +129,15 @@ def main():
         raise FileNotFoundError(f"Configuration file not found: {config_path}")
     
     config = Config.from_yaml(config_path)
+    
+    # Override config with command line arguments
+    if args.batch_size is not None:
+        config.training.batch_size = args.batch_size
+    if args.num_epochs is not None:
+        config.training.num_epochs = args.num_epochs
+    if args.level is not None:
+        config.data.source_level = args.level
+        config.data.target_level = args.level
     
     # Set seed
     seed = args.seed if args.seed is not None else (config.seed if config.seed else 42)
@@ -124,6 +153,9 @@ def main():
     logger.info("=" * 80)
     logger.info(f"Configuration: {config_path}")
     logger.info(f"Model: {config.model.name}")
+    logger.info(f"Batch size: {config.training.batch_size}")
+    logger.info(f"Number of epochs: {config.training.num_epochs}")
+    logger.info(f"Level: {config.data.source_level} (source and target)")
     logger.info(f"Seed: {seed}")
     logger.info("=" * 80)
     

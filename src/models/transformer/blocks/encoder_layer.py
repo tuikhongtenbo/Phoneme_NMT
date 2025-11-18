@@ -1,0 +1,74 @@
+"""
+Transformer Encoder Layer
+Based on "Attention is All You Need" (Vaswani et al., 2017)
+"""
+
+import torch
+import torch.nn as nn
+from typing import Optional
+
+from ..layers.multi_head_attention import MultiHeadAttention
+from ..layers.position_wise_feed_forward import PositionwiseFeedForward
+
+
+class EncoderLayer(nn.Module):
+    """
+    Single encoder layer of Transformer.
+    
+    Consists of:
+    1. Multi-head self-attention
+    2. Add & Norm (residual connection + layer normalization)
+    3. Position-wise feed-forward network
+    4. Add & Norm (residual connection + layer normalization)
+    """
+
+    def __init__(self, d_model: int, ffn_hidden: int, n_head: int, drop_prob: float = 0.1):
+        """
+        Initialize Encoder Layer.
+        
+        Args:
+            d_model: Model dimension
+            ffn_hidden: Feed-forward hidden dimension
+            n_head: Number of attention heads
+            drop_prob: Dropout probability
+        """
+        super(EncoderLayer, self).__init__()
+        self.attention = MultiHeadAttention(d_model=d_model, n_head=n_head, drop_prob=drop_prob)
+        self.norm1 = nn.LayerNorm(d_model)
+        self.dropout1 = nn.Dropout(p=drop_prob)
+
+        self.ffn = PositionwiseFeedForward(d_model=d_model, hidden=ffn_hidden, drop_prob=drop_prob)
+        self.norm2 = nn.LayerNorm(d_model)
+        self.dropout2 = nn.Dropout(p=drop_prob)
+
+    def forward(self, x: torch.Tensor, src_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """
+        Forward pass through encoder layer.
+        
+        Args:
+            x: Input tensor
+                Shape: (batch_size, length, d_model)
+            src_mask: Source mask
+                Shape: (batch_size, length, length) or broadcastable
+        
+        Returns:
+            output: Encoded output
+                Shape: (batch_size, length, d_model)
+        """
+        # 1. Compute self attention
+        _x = x
+        x = self.attention(q=x, k=x, v=x, mask=src_mask)
+        
+        # 2. Add and norm (residual connection + layer normalization)
+        x = self.dropout1(x)
+        x = self.norm1(x + _x)
+        
+        # 3. Position-wise feed forward network
+        _x = x
+        x = self.ffn(x)
+      
+        # 4. Add and norm (residual connection + layer normalization)
+        x = self.dropout2(x)
+        x = self.norm2(x + _x)
+        
+        return x

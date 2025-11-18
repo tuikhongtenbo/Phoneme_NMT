@@ -3,10 +3,10 @@ Model implementations
 """
 
 from .base_model import BaseModel
-from .lstm_bahdanau import LSTMBahdanau
-from .lstm_luong import LSTMLuong
+from .lstm.lstm_bahdanau import LSTMBahdanau
+from .lstm.lstm_luong import LSTMLuong
+from .lstm.encoder import LSTMEncoder
 from .transformer import TransformerModel
-from .encoder import LSTMEncoder
 
 __all__ = [
     'BaseModel',
