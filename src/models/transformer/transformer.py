@@ -83,8 +83,8 @@ class Transformer(BaseModel):
             padding_idx=self.tgt_pad_idx
         )
         
-        # Override output_projection to use decoder's linear layer
-        self.output_projection = self.decoder.linear
+        # Output projection
+        self.output_projection = nn.Linear(self.embed_dim, tgt_vocab_size)
         
         # Tied embeddings flag
         self.tied_embeddings = config.get("model.tied_embeddings", False)
@@ -107,10 +107,10 @@ class Transformer(BaseModel):
     
     def _apply_tied_embeddings(self):
         """Apply weight tying between target embedding and output projection."""
-        if not hasattr(self.decoder, 'emb') or not hasattr(self.decoder, 'linear'):
-            raise RuntimeError("Decoder must have 'emb' and 'linear' before applying tied embeddings")
+        if not hasattr(self.decoder, 'emb') or not hasattr(self, 'output_projection'):
+            raise RuntimeError("Decoder must have 'emb' and output_projection must exist before applying tied embeddings")
         # Share weights: output_projection.weight will reference decoder embedding weight
-        self.decoder.linear.weight = self.decoder.emb.tok_emb.weight
+        self.output_projection.weight = self.decoder.emb.tok_emb.weight
     
     @staticmethod
     def create_look_ahead_mask(size: int, device: torch.device = None) -> torch.Tensor:
@@ -265,8 +265,10 @@ class Transformer(BaseModel):
         enc_src = self.encoder(src_seq, src_mask)
         
         # Decode
-        output = self.decoder(tgt_seq, enc_src, tgt_mask, src_mask)
+        d_out = self.decoder(tgt_seq, enc_src, tgt_mask, src_mask)
         
+        # Output projection 
+        output = self.output_projection(d_out)
         return output
     
     def encode(
@@ -390,8 +392,8 @@ class Transformer(BaseModel):
         # Get output for the last position
         current_output = decoder_output[:, -1:, :]
         
-        # Project to vocabulary
-        logits = self.decoder.linear(current_output)
+        # Project to vocabulary using output_projection
+        logits = self.output_projection(current_output)
         logits = logits.squeeze(dim=1)
         
         # Update past_key_values

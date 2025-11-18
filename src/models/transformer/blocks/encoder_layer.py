@@ -55,20 +55,14 @@ class EncoderLayer(nn.Module):
             output: Encoded output
                 Shape: (batch_size, length, d_model)
         """
-        # 1. Compute self attention
-        _x = x
-        x = self.attention(q=x, k=x, v=x, mask=src_mask)
+        # 1. Normalize before attention 
+        x_norm = self.norm1(x)
+        x_attn = self.attention(q=x_norm, k=x_norm, v=x_norm, mask=src_mask)
+        x = x + self.dropout1(x_attn)
         
-        # 2. Add and norm (residual connection + layer normalization)
-        x = self.dropout1(x)
-        x = self.norm1(x + _x)
-        
-        # 3. Position-wise feed forward network
-        _x = x
-        x = self.ffn(x)
-      
-        # 4. Add and norm (residual connection + layer normalization)
-        x = self.dropout2(x)
-        x = self.norm2(x + _x)
+        # 2. Normalize before FFN 
+        x_norm = self.norm2(x)
+        x_ff = self.ffn(x_norm)
+        x = x + self.dropout2(x_ff)
         
         return x

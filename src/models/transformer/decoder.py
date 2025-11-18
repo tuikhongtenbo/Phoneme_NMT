@@ -64,8 +64,6 @@ class Decoder(nn.Module):
             for _ in range(n_layers)
         ])
 
-        self.linear = nn.Linear(d_model, dec_voc_size)
-
     def forward(
         self, 
         trg: torch.Tensor, 
@@ -87,14 +85,12 @@ class Decoder(nn.Module):
                 Shape: (batch_size, tgt_len, src_len) or broadcastable
         
         Returns:
-            Decoder output
-                Shape: (batch_size, tgt_len, dec_voc_size)
+            Decoder output (hidden states)
+                Shape: (batch_size, tgt_len, d_model)
         """
         trg = self.emb(trg)
 
         for layer in self.layers:
             trg = layer(trg, enc_src, trg_mask, src_mask)
 
-        # Pass to output projection (LM head)
-        output = self.linear(trg)
-        return output
+        return trg

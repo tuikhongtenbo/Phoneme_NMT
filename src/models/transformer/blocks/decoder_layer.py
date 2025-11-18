@@ -71,29 +71,20 @@ class DecoderLayer(nn.Module):
             output: Decoded output
                 Shape: (batch_size, tgt_len, d_model)
         """
-        # 1. Compute self attention
-        _x = dec
-        x = self.self_attention(q=dec, k=dec, v=dec, mask=trg_mask)
-        
-        # 2. Add and norm (residual connection + layer normalization)
-        x = self.dropout1(x)
-        x = self.norm1(x + _x)
+        # 1. Normalize before self-attention 
+        x_norm = self.norm1(dec)
+        x_attn = self.self_attention(q=x_norm, k=x_norm, v=x_norm, mask=trg_mask)
+        x = dec + self.dropout1(x_attn)
 
         if enc is not None:
-            # 3. Compute encoder-decoder attention
-            _x = x
-            x = self.enc_dec_attention(q=x, k=enc, v=enc, mask=src_mask)
-            
-            # 4. Add and norm (residual connection + layer normalization)
-            x = self.dropout2(x)
-            x = self.norm2(x + _x)
+            # 2. Normalize before encoder-decoder attention 
+            x_norm = self.norm2(x)
+            x_attn = self.enc_dec_attention(q=x_norm, k=enc, v=enc, mask=src_mask)
+            x = x + self.dropout2(x_attn)
 
-        # 5. Position-wise feed forward network
-        _x = x
-        x = self.ffn(x)
-        
-        # 6. Add and norm (residual connection + layer normalization)
-        x = self.dropout3(x)
-        x = self.norm3(x + _x)
+        # 3. Normalize before FFN 
+        x_norm = self.norm3(x)
+        x_ff = self.ffn(x_norm)
+        x = x + self.dropout3(x_ff)
         
         return x
