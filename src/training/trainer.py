@@ -321,7 +321,7 @@ class Trainer:
         all_targets_text = []
         
         with torch.no_grad():
-            for batch in tqdm(data_loader, desc="Evaluating", leave=False):
+            for batch in tqdm[Any](data_loader, desc="Evaluating", leave=False, position=0, dynamic_ncols=True):
                 src_seq, tgt_seq = batch
                 src_seq, tgt_input, tgt_output, (src_mask, tgt_mask) = self._prepare_batch(src_seq, tgt_seq)
                 
