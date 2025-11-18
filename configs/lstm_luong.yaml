@@ -27,8 +27,8 @@ data:
   unk_id: 3
   
   # Target level: 'word' or 'phoneme'
-  target_level: "word"
-  source_level: "word"
+  target_level: "phoneme"
+  source_level: "phoneme"
   
   # Direct paths to training data files
   train_src: "/kaggle/input/phomt/train_end_clean.en"
