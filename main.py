@@ -54,6 +54,12 @@ def create_model(config: Config, src_vocab_size: int, tgt_vocab_size: int):
         "model.ff_dim": config.model.ff_dim,
     }
     
+    # Add encoder_layers and decoder_layers if they exist in config
+    if hasattr(config.model, 'encoder_layers'):
+        model_config["model.encoder_layers"] = config.model.encoder_layers
+    if hasattr(config.model, 'decoder_layers'):
+        model_config["model.decoder_layers"] = config.model.decoder_layers
+    
     if model_name == "transformer":
         model = TransformerModel(
             config=model_config,

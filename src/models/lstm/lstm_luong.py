@@ -151,7 +151,9 @@ class LSTMLuong(BaseModel):
         
         # Model hyperparameters
         self.hidden_dim = config.get("model.hidden_dim", 512)
-        self.num_layers = config.get("model.num_layers", 2)
+        # Support separate encoder/decoder layers, fallback to num_layers
+        self.encoder_layers = config.get("model.encoder_layers", config.get("model.num_layers", 2))
+        self.decoder_layers = config.get("model.decoder_layers", config.get("model.num_layers", 2))
         self.dropout_rate = config.get("model.dropout", 0.1)
         attention_type = config.get("model.attention_type", "general")
         
@@ -160,7 +162,7 @@ class LSTMLuong(BaseModel):
             vocab_size=src_vocab_size,
             embed_dim=self.embed_dim,
             hidden_dim=self.hidden_dim,
-            num_layers=self.num_layers,
+            num_layers=self.encoder_layers,
             dropout=self.dropout_rate,
             bidirectional=False
         )
@@ -169,7 +171,7 @@ class LSTMLuong(BaseModel):
             vocab_size=tgt_vocab_size,
             embed_dim=self.embed_dim,
             hidden_dim=self.hidden_dim,
-            num_layers=self.num_layers,
+            num_layers=self.decoder_layers,
             dropout=self.dropout_rate,
             attention_type=attention_type
         )
