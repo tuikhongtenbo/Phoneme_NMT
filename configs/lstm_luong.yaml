@@ -4,7 +4,10 @@ model:
   name: "lstm_luong"
   embed_dim: 512
   hidden_dim: 512
-  num_layers: 2
+  # For LSTM encoder/decoder; keep num_layers for backward compatibility
+  num_layers: 3
+  encoder_layers: 3
+  decoder_layers: 3
   dropout: 0.1
   attention_type: "general"  # Luong attention types: general, dot, concat
 

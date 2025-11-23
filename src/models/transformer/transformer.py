@@ -45,7 +45,9 @@ class Transformer(BaseModel):
         
         # Model hyperparameters
         self.num_heads = config.get("model.num_heads", 8)
-        self.num_layers = config.get("model.num_layers", 6)
+        # Support separate encoder/decoder layers, fallback to num_layers
+        self.encoder_layers = config.get("model.encoder_layers", config.get("model.num_layers", 6))
+        self.decoder_layers = config.get("model.decoder_layers", config.get("model.num_layers", 6))
         self.ff_dim = config.get("model.ff_dim", 2048)
         self.max_len = config.get("data.max_seq_len", 100)
         
@@ -65,7 +67,7 @@ class Transformer(BaseModel):
             d_model=self.embed_dim,
             ffn_hidden=self.ff_dim,
             n_head=self.num_heads,
-            n_layers=self.num_layers,
+            n_layers=self.encoder_layers,
             drop_prob=self.dropout_rate,
             device=self.device,
             padding_idx=self.src_pad_idx
@@ -77,7 +79,7 @@ class Transformer(BaseModel):
             d_model=self.embed_dim,
             ffn_hidden=self.ff_dim,
             n_head=self.num_heads,
-            n_layers=self.num_layers,
+            n_layers=self.decoder_layers,
             drop_prob=self.dropout_rate,
             device=self.device,
             padding_idx=self.tgt_pad_idx

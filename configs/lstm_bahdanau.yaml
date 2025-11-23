@@ -4,7 +4,9 @@ model:
   name: "lstm_bahdanau"
   embed_dim: 512
   hidden_dim: 512
-  num_layers: 2
+  encoder_layers: 3
+  decoder_layers: 3
+  num_layers: 3  # Fallback for backward compatibility
   dropout: 0.1
   attention_type: "bahdanau"
 

@@ -14,8 +14,12 @@ class ModelConfig(BaseModel):
     name: str = Field(..., description="Model name")
     embed_dim: int = Field(512, description="Embedding dimension")
     hidden_dim: int = Field(512, description="Hidden dimension")
-    num_layers: int = Field(2, description="Number of layers")
+    num_layers: int = Field(2, description="Number of layers (fallback if encoder_layers/decoder_layers not specified)")
     dropout: float = Field(0.1, ge=0.0, le=1.0, description="Dropout rate")
+    
+    # Separate encoder/decoder layers (optional, falls back to num_layers)
+    encoder_layers: Optional[int] = Field(None, description="Number of encoder layers")
+    decoder_layers: Optional[int] = Field(None, description="Number of decoder layers")
     
     # For LSTM models
     attention_type: Optional[str] = Field(None, description="Attention type: bahdanau, general, dot, concat")
