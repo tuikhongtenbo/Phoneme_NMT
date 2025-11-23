@@ -119,6 +119,30 @@ def main():
         default=None,
         help="Sequence level: 'word' or 'phoneme' (overrides config)"
     )
+    parser.add_argument(
+        "--learning_rate",
+        type=float,
+        default=None,
+        help="Learning rate (overrides config)"
+    )
+    parser.add_argument(
+        "--eval_steps",
+        type=int,
+        default=None,
+        help="Evaluate every N steps (overrides config.training.eval_every)"
+    )
+    parser.add_argument(
+        "--max_length",
+        type=int,
+        default=None,
+        help="Maximum sequence length (overrides config.data.max_seq_len)"
+    )
+    parser.add_argument(
+        "--save_steps",
+        type=int,
+        default=None,
+        help="Save checkpoint every N steps (overrides config.training.save_every)"
+    )
     
     args = parser.parse_args()
     
@@ -134,6 +158,14 @@ def main():
         config.training.batch_size = args.batch_size
     if args.num_epochs is not None:
         config.training.num_epochs = args.num_epochs
+    if args.learning_rate is not None:
+        config.training.learning_rate = args.learning_rate
+    if args.eval_steps is not None:
+        config.training.eval_every = args.eval_steps
+    if args.max_length is not None:
+        config.data.max_seq_len = args.max_length
+    if args.save_steps is not None:
+        config.training.save_every = args.save_steps
     if args.level is not None:
         config.data.source_level = args.level
         config.data.target_level = args.level
