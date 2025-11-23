@@ -148,11 +148,25 @@ python main.py --config configs/transformer.yaml \
 python main.py --config configs/transformer.yaml \
     --resume checkpoints/transformer/model_epoch_001.pt
 
+# Override learning rate and training steps
+python main.py --config configs/transformer.yaml \
+    --learning_rate 0.0001 \
+    --eval_steps 500 \
+    --save_steps 2500
+
+# Override maximum sequence length
+python main.py --config configs/transformer.yaml \
+    --max_length 128
+
 # Combine multiple overrides
 python main.py --config configs/transformer.yaml \
     --batch_size 16 \
     --num_epochs 10 \
+    --learning_rate 0.0001 \
     --level phoneme \
+    --max_length 100 \
+    --eval_steps 500 \
+    --save_steps 2500 \
     --seed 123
 ```
 
@@ -163,7 +177,11 @@ python main.py --config configs/transformer.yaml \
 | `--config` | str | Path to YAML configuration file | `configs/transformer.yaml` |
 | `--batch_size` | int | Batch size (overrides config) | None |
 | `--num_epochs` | int | Number of training epochs (overrides config) | None |
+| `--learning_rate` | float | Learning rate (overrides config) | None |
 | `--level` | str | Processing level: `word` or `phoneme` (overrides config) | None |
+| `--max_length` | int | Maximum sequence length (overrides config.data.max_seq_len) | None |
+| `--eval_steps` | int | Evaluate every N steps (overrides config.training.eval_every) | None |
+| `--save_steps` | int | Save checkpoint every N steps (overrides config.training.save_every) | None |
 | `--seed` | int | Random seed for reproducibility (overrides config) | None |
 | `--resume` | str | Path to checkpoint file to resume training | None |
 
