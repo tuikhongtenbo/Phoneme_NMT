@@ -159,7 +159,7 @@ def main():
     
     config = Config.from_yaml(config_path)
     
-    # Override config with command line arguments
+    # Parsing with command line arguments
     if args.batch_size is not None:
         config.training.batch_size = args.batch_size
     if args.num_epochs is not None:
@@ -259,6 +259,12 @@ def main():
     logger.info(f"Total parameters: {total_params:,}")
     logger.info(f"Trainable parameters: {trainable_params:,}")
     
+    # Update config with actual target_level from preprocessing 
+    if target_level != config.data.target_level:
+        logger.info(f"Note: Actual target_level ({target_level}) differs from config ({config.data.target_level}). "
+                   f"Using actual level from preprocessing.")
+        config.data.target_level = target_level
+    
     # Create trainer
     logger.info("\nInitializing trainer...")
     trainer = Trainer(
@@ -268,7 +274,8 @@ def main():
         dev_loader=dev_loader,
         logger=logger,
         input_vocab=input_vocab,
-        output_vocab=output_vocab
+        output_vocab=output_vocab,
+        target_level=target_level  # Pass actual target_level from preprocessing
     )
     
     # Start training
