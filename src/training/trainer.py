@@ -38,7 +38,8 @@ class Trainer:
         dev_loader: Optional[DataLoader] = None,
         logger: Optional[Any] = None,
         input_vocab: Optional[Any] = None,
-        output_vocab: Optional[Any] = None
+        output_vocab: Optional[Any] = None,
+        target_level: Optional[str] = None
     ):
         """
         Initialize trainer.
@@ -51,6 +52,7 @@ class Trainer:
             logger: Logger instance (optional)
             input_vocab: Source vocabulary object (for decoding)
             output_vocab: Target vocabulary object (for decoding)
+            target_level: Actual target level used ('word' or 'phoneme')
         """
         self.model = model
         self.config = config
@@ -78,8 +80,8 @@ class Trainer:
         self.sos_id = config.data.sos_id
         self.eos_id = config.data.eos_id
         
-        # Target level (word or phoneme)
-        self.target_level = config.data.target_level
+        # Target level (word or phoneme) 
+        self.target_level = target_level if target_level is not None else config.data.target_level
         
         # Initialize optimizer
         self.optimizer = self._create_optimizer()

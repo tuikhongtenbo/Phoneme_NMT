@@ -4,8 +4,8 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from typing import List, Tuple, Dict, Any, Union
 
-# Import ID and Target Level from preprocessing
-from .preprocessing import PAD_ID 
+# Import ID from constants
+from .constants import PAD_ID 
 
 # --- Update TranslationDataset to handle both types of target indices ---
 class TranslationDataset(Dataset):
