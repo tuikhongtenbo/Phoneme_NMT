@@ -8,6 +8,7 @@ import os
 import torch
 import sys
 from tqdm import tqdm
+from transformers import AutoTokenizer
 
 # Import constants
 from .constants import PAD_ID
@@ -96,9 +97,19 @@ def prepare_data(splits: List[str], max_len: int, min_count: int = 3, config: An
         raise ValueError("Missing 'train' split required for vocabulary building.")
 
     # 2. Get tokenization levels from config
+    tokenizer_type = None
     if config and hasattr(config, 'data'):
-        source_level = getattr(config.data, 'source_level', 'word').lower()
-        target_level = getattr(config.data, 'target_level', 'word').lower()
+        tokenizer_type = getattr(config.data, 'tokenizer_type', None)
+        if tokenizer_type is not None:
+            # Pretrained mode: override source_level and target_level
+            source_level = 'pretrained'
+            target_level = 'pretrained'
+            print(f"Using pretrained tokenizer type: **{tokenizer_type}**")
+            print(f"  - pretrained_1: mBART (EN) -> mBART (VI)")
+            print(f"  - pretrained_2: mBART (EN) -> BARTPho (VI)")
+        else:
+            source_level = getattr(config.data, 'source_level', 'word').lower()
+            target_level = getattr(config.data, 'target_level', 'word').lower()
     else:
         source_level = 'word'
         target_level = 'phoneme'
@@ -106,7 +117,140 @@ def prepare_data(splits: List[str], max_len: int, min_count: int = 3, config: An
     print(f"Source (EN) tokenization level: **{source_level}**")
     print(f"Target (VI) tokenization level: **{target_level}**")
 
-    # Get vocabulary file paths
+    # Handle pretrained tokenizers
+    if tokenizer_type is not None:
+        print("\n" + "="*60)
+        print("Initializing pretrained tokenizers...")
+        print("="*60)
+        s
+        # Initialize tokenizers based on tokenizer_type
+        if tokenizer_type == "pretrained_1":
+            # mBART -> mBART
+            print("Using mBART tokenizer for both source and target")
+            source_tokenizer_name = "facebook/mbart-large-50"
+            target_tokenizer_name = "facebook/mbart-large-50"
+            
+            source_tokenizer = AutoTokenizer.from_pretrained(source_tokenizer_name)
+            source_tokenizer.src_lang = "en_XX"
+            
+            target_tokenizer = AutoTokenizer.from_pretrained(target_tokenizer_name)
+            target_tokenizer.tgt_lang = "vi_VN"
+            
+        elif tokenizer_type == "pretrained_2":
+            # mBART -> BARTPho
+            print("Using mBART tokenizer for source, BARTPho for target")
+            source_tokenizer_name = "facebook/mbart-large-50"
+            target_tokenizer_name = "vinai/bartpho-word"
+            
+            source_tokenizer = AutoTokenizer.from_pretrained(source_tokenizer_name)
+            source_tokenizer.src_lang = "en_XX"
+            
+            target_tokenizer = AutoTokenizer.from_pretrained(target_tokenizer_name)
+        else:
+            raise ValueError(f"Unknown tokenizer_type: {tokenizer_type}. Must be 'pretrained_1' or 'pretrained_2'")
+        
+        # Create wrapper vocab objects for compatibility
+        class PretrainedVocabWrapper:
+            """Wrapper to make pretrained tokenizers compatible with existing vocab interface"""
+            def __init__(self, tokenizer, name="pretrained"):
+                self.tokenizer = tokenizer
+                self.name = name
+                self.vocab_size = len(tokenizer)
+                self.count = self.vocab_size
+                
+                # Special token IDs
+                self.pad_id = tokenizer.pad_token_id
+                self.bos_id = tokenizer.bos_token_id
+                self.eos_id = tokenizer.eos_token_id
+                self.unk_id = tokenizer.unk_token_id
+                
+                # For compatibility
+                self.padding_idx = self.pad_id
+                self.bos_idx = self.bos_id
+                self.eos_idx = self.eos_id
+                self.unk_idx = self.unk_id
+            
+            def encode_caption(self, text: str, add_special_tokens: bool = True):
+                """Encode text to token IDs"""
+                encoded = self.tokenizer(
+                    text,
+                    add_special_tokens=add_special_tokens,
+                    return_tensors=None,
+                    padding=False,
+                    truncation=False
+                )
+                return encoded['input_ids']
+            
+            def sentence_to_indices(self, sentence: str):
+                """Alias for encode_caption for compatibility"""
+                return self.encode_caption(sentence, add_special_tokens=False)
+        
+        input_vocab = PretrainedVocabWrapper(source_tokenizer, "source")
+        output_vocab = PretrainedVocabWrapper(target_tokenizer, "target")
+        
+        print(f"✓ Source tokenizer vocab size: {input_vocab.vocab_size}")
+        print(f"✓ Target tokenizer vocab size: {output_vocab.vocab_size}")
+        print("="*60 + "\n")
+        
+        # Encode all data with pretrained tokenizers
+        indexed_data = {}
+        for split, pairs in all_raw_pairs.items():
+            print(f"\nProcessing {split} split ({len(pairs):,} pairs)...")
+            sys.stdout.flush()
+            current_indexed_pairs = []
+            
+            progress_bar = tqdm(pairs, desc=f"Encoding {split}", file=sys.stdout, mininterval=1.0, ncols=100)
+            
+            for idx, (en_sent, vi_sent) in enumerate(progress_bar):
+                try:
+                    # Encode with pretrained tokenizers
+                    en_indices = input_vocab.encode_caption(en_sent, add_special_tokens=True)
+                    vi_indices = output_vocab.encode_caption(vi_sent, add_special_tokens=True)
+                    
+                    # Calculate lengths
+                    en_len = len(en_indices)
+                    vi_len = len(vi_indices)
+                    
+                    # Filter by length
+                    if en_len <= max_len and vi_len <= max_len:
+                        current_indexed_pairs.append((en_indices, vi_indices))
+                    
+                    # Update progress bar
+                    if (idx + 1) % 1000 == 0:
+                        progress_bar.set_postfix({
+                            'processed': f'{idx+1:,}/{len(pairs):,}',
+                            'kept': f'{len(current_indexed_pairs):,}'
+                        })
+                        
+                except Exception as e:
+                    if idx < 10:
+                        print(f"Warning: Error processing pair {idx}: {e}")
+                    continue
+            
+            progress_bar.close()
+            indexed_data[split] = current_indexed_pairs
+            print(f"✓ Indexed {split}: {len(current_indexed_pairs):,} pairs kept out of {len(pairs):,} total")
+            sys.stdout.flush()
+        
+        print("\n" + "="*60)
+        print("Data preparation completed!")
+        print("="*60)
+        total_pairs = sum(len(pairs) for pairs in indexed_data.values())
+        print(f"Total indexed pairs across all splits: {total_pairs:,}")
+        for split, pairs in indexed_data.items():
+            print(f"  {split}: {len(pairs):,} pairs")
+        print("="*60 + "\n")
+        sys.stdout.flush()
+        
+        return {
+            'input_vocab': input_vocab,
+            'output_vocab': output_vocab,
+            'data': indexed_data,
+            'source_level': source_level,
+            'target_level': target_level
+        }
+
+    # Get vocabulary file paths 
     input_vocab_path, output_vocab_path = get_vocab_filepath(
         source_level, target_level, min_count
     )
