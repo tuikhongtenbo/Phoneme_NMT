@@ -45,7 +45,7 @@ def collate_fn_factory(target_level: str):
     Factory function to create a collate_fn dynamically based on the target tokenization level.
     """
     
-    if target_level == 'word':
+    if target_level == 'word' or target_level == 'pretrained':
         # --- Word-Level Collate Function ---
         def word_collate_fn(batch: List[Tuple[torch.Tensor, torch.Tensor]]) -> Tuple[torch.Tensor, torch.Tensor]:
             """Handles 1D target tensors (Word-level)."""

@@ -34,6 +34,9 @@ data:
   target_level: "word"
   source_level: "word"
   
+  # Pretrained tokenizer type: null, "pretrained_1" (mBART->mBART), or "pretrained_2" (mBART->BARTPho)
+  tokenizer_type: null
+  
   # Direct paths to training data files
   train_src: "dataset/train_end_clean.en"
   train_tgt: "dataset/train_end_clean.vi"

@@ -121,9 +121,9 @@ def main():
     parser.add_argument(
         "--level",
         type=str,
-        choices=["word", "phoneme"],
+        choices=["word", "phoneme", "pretrained_1", "pretrained_2"],
         default=None,
-        help="Sequence level: 'word' or 'phoneme' (overrides config)"
+        help="Sequence level: 'word', 'phoneme', 'pretrained_1' (mBART->mBART), or 'pretrained_2' (mBART->BARTPho) (overrides config)"
     )
     parser.add_argument(
         "--learning_rate",
@@ -173,8 +173,14 @@ def main():
     if args.save_steps is not None:
         config.training.save_every = args.save_steps
     if args.level is not None:
-        config.data.source_level = args.level
-        config.data.target_level = args.level
+        if args.level in ["pretrained_1", "pretrained_2"]:
+            # Set tokenizer_type for pretrained modes
+            config.data.tokenizer_type = args.level
+        else:
+            # Set source_level and target_level for word/phoneme modes
+            config.data.source_level = args.level
+            config.data.target_level = args.level
+            config.data.tokenizer_type = None  # Clear tokenizer_type if using word/phoneme
     
     # Set seed
     seed = args.seed if args.seed is not None else (config.seed if config.seed else 42)
@@ -192,7 +198,12 @@ def main():
     logger.info(f"Model: {config.model.name}")
     logger.info(f"Batch size: {config.training.batch_size}")
     logger.info(f"Number of epochs: {config.training.num_epochs}")
-    logger.info(f"Level: {config.data.source_level} (source and target)")
+    if config.data.tokenizer_type:
+        logger.info(f"Tokenizer type: {config.data.tokenizer_type}")
+        logger.info(f"  - pretrained_1: mBART (EN) -> mBART (VI)")
+        logger.info(f"  - pretrained_2: mBART (EN) -> BARTPho (VI)")
+    else:
+        logger.info(f"Level: {config.data.source_level} (source and target)")
     logger.info(f"Seed: {seed}")
     logger.info("=" * 80)
     

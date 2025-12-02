@@ -62,9 +62,15 @@ class DataConfig(BaseModel):
     source_level: Literal["word", "phoneme"] = Field("word", description="Sequence level: word or phoneme (applies to both source and target)")
     target_level: Literal["word", "phoneme"] = Field("word", description="Sequence level: word or phoneme (should match source_level)")
     
+    # Pretrained tokenizer type: None, "pretrained_1" (mBART->mBART), or "pretrained_2" (mBART->BARTPho)
+    tokenizer_type: Optional[Literal["pretrained_1", "pretrained_2"]] = Field(None, description="Pretrained tokenizer type: 'pretrained_1' (mBART->mBART) or 'pretrained_2' (mBART->BARTPho). If set, overrides source_level and target_level.")
+    
     @validator('target_level')
     def validate_levels_match(cls, v, values):
         """Ensure source_level and target_level match (only word or phoneme, not mixed)"""
+        
+        if 'tokenizer_type' in values and values.get('tokenizer_type') is not None:
+            return v
         if 'source_level' in values:
             source_level = values.get('source_level')
             if v != source_level:
