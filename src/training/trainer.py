@@ -295,6 +295,17 @@ class Trainer:
     
     def _decode_indices_to_text(self, indices: List[int], vocab) -> str:
         """Decode indices to text string."""
+        # Handle pretrained tokenizers
+        if hasattr(vocab, 'tokenizer'):
+            # Pretrained tokenizer 
+            try:
+                decoded = vocab.tokenizer.decode(indices, skip_special_tokens=True)
+                return decoded
+            except Exception as e:
+                self.logger.warning(f"Error decoding with pretrained tokenizer: {e}")
+                return ""
+        
+        # Handle regular vocabularies
         special_tokens = {0, 1, 2, 3}  # PAD, SOS, EOS, UNK
         
         if hasattr(vocab, 'index2word'):
