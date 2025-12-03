@@ -122,7 +122,6 @@ def prepare_data(splits: List[str], max_len: int, min_count: int = 3, config: An
         print("\n" + "="*60)
         print("Initializing pretrained tokenizers...")
         print("="*60)
-        s
         # Initialize tokenizers based on tokenizer_type
         if tokenizer_type == "pretrained_1":
             # mBART -> mBART
