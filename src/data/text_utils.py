@@ -10,4 +10,3 @@ def preprocess_sentence(sentence: str):
     tokens = sentence.strip().split()
     
     return tokens
-

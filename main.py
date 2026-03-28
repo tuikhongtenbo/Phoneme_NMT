@@ -10,9 +10,8 @@ import numpy as np
 from pathlib import Path
 
 from configs.config import Config
-from src.data.preprocessing import prepare_data
-from src.data.data_loader import create_data_loader
-from src.models import TransformerModel, LSTMBahdanau, LSTMLuong
+from src.data.data_loader import prepare_data, create_data_loader
+from src.models import TransformerModel, LSTMBahdanau, LSTMLuong, LSTMSeq2Seq
 from src.training.trainer import Trainer
 from src.utils.logger import setup_logger
 
@@ -78,9 +77,15 @@ def create_model(config: Config, src_vocab_size: int, tgt_vocab_size: int):
             src_vocab_size=src_vocab_size,
             tgt_vocab_size=tgt_vocab_size
         )
+    elif model_name == "lstm_seq2seq" or (model_name == "lstm" and config.model.attention_type in ["none", "None", None, ""]):
+        model = LSTMSeq2Seq(
+            config=model_config,
+            src_vocab_size=src_vocab_size,
+            tgt_vocab_size=tgt_vocab_size
+        )
     else:
         raise ValueError(f"Unknown model name: {model_name}. "
-                        f"Supported: 'transformer', 'lstm_bahdanau', 'lstm_luong'")
+                        f"Supported: 'transformer', 'lstm_bahdanau', 'lstm_luong', 'lstm_seq2seq'")
     
     return model
 
@@ -119,11 +124,25 @@ def main():
         help="Number of epochs (overrides config)"
     )
     parser.add_argument(
-        "--level",
+        "--src_level",
         type=str,
-        choices=["word", "phoneme", "pretrained_1", "pretrained_2"],
+        choices=["word", "phoneme", "bpe", "unigram"],
         default=None,
-        help="Sequence level: 'word', 'phoneme', 'pretrained_1' (mBART->mBART), or 'pretrained_2' (mBART->BARTPho) (overrides config)"
+        help="Source sequence level (overrides config)"
+    )
+    parser.add_argument(
+        "--tgt_level",
+        type=str,
+        choices=["word", "phoneme", "bpe", "unigram"],
+        default=None,
+        help="Target sequence level (overrides config)"
+    )
+    parser.add_argument(
+        "--pretrained_mode",
+        type=str,
+        choices=["pretrained_1", "pretrained_2"],
+        default=None,
+        help="'pretrained_1' (mBART->mBART) or 'pretrained_2' (mBART->BARTPho)"
     )
     parser.add_argument(
         "--learning_rate",
@@ -172,15 +191,15 @@ def main():
         config.data.max_seq_len = args.max_length
     if args.save_steps is not None:
         config.training.save_every = args.save_steps
-    if args.level is not None:
-        if args.level in ["pretrained_1", "pretrained_2"]:
-            # Set tokenizer_type for pretrained modes
-            config.data.tokenizer_type = args.level
-        else:
-            # Set source_level and target_level for word/phoneme modes
-            config.data.source_level = args.level
-            config.data.target_level = args.level
-            config.data.tokenizer_type = None  # Clear tokenizer_type if using word/phoneme
+    if args.pretrained_mode is not None:
+        config.data.tokenizer_type = args.pretrained_mode
+    else:
+        if args.src_level is not None:
+            config.data.source_level = args.src_level
+            config.data.tokenizer_type = None
+        if args.tgt_level is not None:
+            config.data.target_level = args.tgt_level
+            config.data.tokenizer_type = None
     
     # Set seed
     seed = args.seed if args.seed is not None else (config.seed if config.seed else 42)
@@ -203,7 +222,8 @@ def main():
         logger.info(f"  - pretrained_1: mBART (EN) -> mBART (VI)")
         logger.info(f"  - pretrained_2: mBART (EN) -> BARTPho (VI)")
     else:
-        logger.info(f"Level: {config.data.source_level} (source and target)")
+        logger.info(f"Source Level: {config.data.source_level}")
+        logger.info(f"Target Level: {config.data.target_level}")
     logger.info(f"Seed: {seed}")
     logger.info("=" * 80)
     

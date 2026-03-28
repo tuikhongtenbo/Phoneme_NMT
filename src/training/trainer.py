@@ -217,10 +217,6 @@ class Trainer:
         src_seq = src_seq.to(self.device)
         tgt_seq = tgt_seq.to(self.device)
         
-        # Handle phoneme-level targets (2D -> flatten for loss)
-        if self.target_level == 'phoneme' and len(tgt_seq.shape) == 3:
-            tgt_seq = tgt_seq[:, :, 0]
-        
         # Create masks
         src_mask = self._create_padding_mask(src_seq, self.pad_id)
         tgt_mask = self._create_padding_mask(tgt_seq, self.pad_id)
@@ -295,6 +291,14 @@ class Trainer:
     
     def _decode_indices_to_text(self, indices: List[int], vocab) -> str:
         """Decode indices to text string."""
+        # Handle custom vocabularies with native decode (like ViWordVocab for phonemes)
+        if hasattr(vocab, 'decode_caption'):
+            try:
+                return vocab.decode_caption(torch.tensor(indices, dtype=torch.long), join_words=True)
+            except Exception as e:
+                self.logger.warning(f"Error decoding with native decode_caption: {e}")
+                return ""
+                
         # Handle pretrained tokenizers
         if hasattr(vocab, 'tokenizer'):
             # Pretrained tokenizer 
@@ -551,12 +555,12 @@ class Trainer:
                     is_best = dev_metrics.get('bleu', 0.0) > self.best_dev_bleu
                     if is_best:
                         self.best_dev_bleu = dev_metrics.get('bleu', 0.0)
-                        self.logger.info(f"  ✓ New best dev BLEU: {self.best_dev_bleu:.4f}")
+                        self.logger.info(f"  [BEST] New best dev BLEU: {self.best_dev_bleu:.4f}")
                 else:
                     is_best = dev_metrics['loss'] < self.best_dev_loss
                     if is_best:
                         self.best_dev_loss = dev_metrics['loss']
-                        self.logger.info(f"  ✓ New best dev loss: {self.best_dev_loss:.4f}")
+                        self.logger.info(f"  [BEST] New best dev loss: {self.best_dev_loss:.4f}")
                 
                 self.save_checkpoint(is_best=is_best)
             else:

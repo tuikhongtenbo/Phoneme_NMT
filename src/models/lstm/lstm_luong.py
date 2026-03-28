@@ -164,7 +164,7 @@ class LSTMLuong(BaseModel):
             hidden_dim=self.hidden_dim,
             num_layers=self.encoder_layers,
             dropout=self.dropout_rate,
-            bidirectional=False
+            bidirectional=True
         )
         
         self.decoder = LSTMDecoderLuong(

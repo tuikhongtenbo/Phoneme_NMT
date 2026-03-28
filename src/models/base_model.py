@@ -4,8 +4,6 @@ from abc import ABC, abstractmethod
 from typing import Dict, Any, Tuple, Optional, List
 import os
 
-# Giả định lớp Config được import từ configs/config.py
-# from configs.config import Config 
 
 class BaseModel(nn.Module, ABC):
     """
@@ -116,7 +114,7 @@ class BaseModel(nn.Module, ABC):
         
         # Lưu state_dict của mô hình
         torch.save(self.state_dict(), full_path)
-        print(f"✅ Đã lưu mô hình tới: {full_path}")
+        print(f"[OK] Saved model to: {full_path}")
 
     def load(self, full_path: str, device: str = 'cpu'):
         """
@@ -130,14 +128,14 @@ class BaseModel(nn.Module, ABC):
             FileNotFoundError: Nếu file trọng số không tồn tại.
         """
         if not os.path.exists(full_path):
-            raise FileNotFoundError(f"❌ Lỗi: Không tìm thấy file trọng số tại {full_path}")
+            raise FileNotFoundError(f"[ERROR] Cannot find checkpoint file at {full_path}")
             
         # Tải state_dict
         state_dict = torch.load(full_path, map_location=device)
         
         # Tải trọng số vào mô hình hiện tại
         self.load_state_dict(state_dict)
-        print(f"✅ Đã tải mô hình từ: {full_path} trên thiết bị {device}")
+        print(f"[OK] Loaded model from: {full_path} (device: {device})")
 
     def predict(self, src_seq: torch.Tensor, max_len: int = 50) -> torch.Tensor:
         """

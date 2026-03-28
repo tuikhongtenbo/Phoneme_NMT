@@ -1,5 +1,5 @@
 """
-LSTM Encoder Module for Vie-Eng NMT
+LSTM Encoder Module
 """
 import torch
 import torch.nn as nn
@@ -9,14 +9,13 @@ from typing import Dict, Any, Optional, Tuple
 class LSTMEncoder(nn.Module):
     """
     LSTM Encoder Module for Vie-Eng NMT
-
+    
     Architecture:
         - Input embedding layer
-        - LSTM layers
+        - Multi-layer LSTM
         - Output: Hidden states and cell states
     References:
-        Bahdanau et al. (2015) "Neural Machine Translation by Jointly Learning
-        to Align and Translate" ICLR 2015
+        Sutskever et al. (2014) "Sequence to Sequence Learning with Neural Networks"
     """ 
 
     def __init__(
@@ -37,69 +36,54 @@ class LSTMEncoder(nn.Module):
             hidden_dim (int): Dimension of the hidden states
             num_layers (int): Number of LSTM layers
             dropout (float): Dropout rate
-            bidirectional (bool): Whether to use bidirectional LSTM
+            bidirectional (bool): Ignored, only for compatibility
         """
-        super(LSTMEncoder, self).__init__()
+        super().__init__()
 
-        self.vocab_size = vocab_size
-        self.embed_dim = embed_dim
         self.hidden_dim = hidden_dim
-        self.num_layers = num_layers
-        self.dropout = dropout
-        self.bidirectional = bidirectional
-        self.num_directions = 2 if bidirectional else 1
-
+        self.n_layers = num_layers
+        
         # Input embedding layer
         self.embedding = nn.Embedding(vocab_size, embed_dim)
 
         # LSTM layers
-        self.lstm = nn.LSTM(
+        self.rnn = nn.LSTM(
             input_size=embed_dim,
             hidden_size=hidden_dim,
             num_layers=num_layers,
             dropout=dropout if num_layers > 1 else 0,
-            bidirectional=bidirectional,
             batch_first=True
         )
 
         # Dropout layer
-        self.dropout_layer = nn.Dropout(dropout)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(
         self, 
-        src_seq: torch.Tensor, 
+        src: torch.Tensor, 
         src_lengths: Optional[torch.Tensor] = None
-    ) -> Tuple[torch.Tensor,Tuple[torch.Tensor, torch.Tensor]]:
+    ) -> Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         """
         Forward pass through the encoder.
 
         Args:
-            src_seq (Tensor): Source sequence indices
+            src (Tensor): Source sequence indices
                 Shape: (batch_size, src_len)
             src_lengths (Tensor, optional): Actual lengths of the source sequences
-                Shape: (batch_size,)
+                Shape: (batch_size,) - Kept for API compatibility
         Returns:
-            encoder_outputs (Tensor): All hidden states from the LSTM 
-                Shape: (batch_size, src_len, hidden_dim * num_directions)
+            outputs (Tensor): All hidden states from the LSTM 
             (hidden, cell) (Tuple): Final hidden and cell states 
-                hidden Shape: (num_layers * num_directions, batch_size, hidden_dim)
-                cell Shape: (num_layers * num_directions, batch_size, hidden_dim)
         """
-        # Input embedding
-        embedded = self.embedding(src_seq)
-        embedded = self.dropout_layer(embedded)
-
-        # Pack sequence for efficient processing
-        if src_lengths is not None:
-            embedded = nn.utils.rnn.pack_padded_sequence(
-                embedded, src_lengths, batch_first=True, enforce_sorted=False
-            )
-
-        # LSTM forward pass
-        encoder_outputs, (hidden, cell) = self.lstm(embedded)
-
-        # Unpack padded sequence
-        if src_lengths is not None:
-            encoder_outputs, _ = nn.utils.rnn.pad_packed_sequence(encoder_outputs, batch_first=True)
-
-        return encoder_outputs, (hidden, cell)
+        # src = [batch size, src length]
+        
+        embedded = self.dropout(self.embedding(src))
+        # embedded = [batch size, src length, embedding dim]
+        
+        outputs, (hidden, cell) = self.rnn(embedded)
+        # outputs = [batch size, src length, hidden dim * n directions]
+        # hidden = [n layers * n directions, batch size, hidden dim]
+        # cell = [n layers * n directions, batch size, hidden dim]
+        
+        # outputs are always from the top hidden layer
+        return outputs, (hidden, cell)
