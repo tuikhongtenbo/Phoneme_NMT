@@ -60,6 +60,7 @@ def create_model(config: Config, src_vocab_size: int, tgt_vocab_size: int):
         model_config["model.decoder_layers"] = config.model.decoder_layers
     
     if model_name == "transformer":
+        model_config["data.max_seq_len"] = config.data.max_seq_len
         model = TransformerModel(
             config=model_config,
             src_vocab_size=src_vocab_size,
