@@ -1,15 +1,10 @@
-# LSTM + Luong Attention configuration
-
 model:
-  name: "lstm_luong"
+  name: "lstm_seq2seq"
   embed_dim: 512
   hidden_dim: 512
-  # For LSTM encoder/decoder; keep num_layers for backward compatibility
-  num_layers: 3
-  encoder_layers: 3
-  decoder_layers: 3
+  num_layers: 2
   dropout: 0.1
-  attention_type: "general"  # Luong attention types: general, dot, concat
+  attention_type: "none"
 
 training:
   batch_size: 16
@@ -30,8 +25,8 @@ data:
   unk_id: 3
 
   # Tokenization level: 'word', 'phoneme', 'bpe', or 'unigram'
+  source_level: "bpe"
   target_level: "phoneme"
-  source_level: "phoneme"
 
   # Pretrained tokenizer type: null, "pretrained_1" (mBART->mBART), or "pretrained_2" (mBART->BARTPho)
   tokenizer_type: null
@@ -56,7 +51,7 @@ data:
   # Vocabulary settings
   min_count: 3
   vocab_size: 16000
-  max_seq_len: 100
+  max_seq_len: 2048
 
 device: "cuda"
 seed: 42

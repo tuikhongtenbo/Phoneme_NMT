@@ -1,190 +1,129 @@
 # English-Vietnamese Neural Machine Translation
 
-A research project implementing baseline Neural Machine Translation (NMT) models for English-Vietnamese translation, supporting various tokenization strategies like **BPE**, **Unigram**, **Word-level**, and **Phoneme-level** processing.
+A research project implementing baseline NMT models for English-Vietnamese translation, supporting **BPE**, **Unigram**, and **Phoneme** tokenization.
 
 ## Overview
 
-This project provides comprehensive implementations of baseline NMT architectures for English-Vietnamese machine translation research:
+- **LSTM + Bahdanau Attention**: Seq2seq with additive attention
+- **LSTM + Luong Attention**: Seq2seq with multiplicative attention (general / dot / concat)
+- **Transformer**: Attention-based architecture (Vaswani et al., 2017)
 
-- **LSTM + Bahdanau Attention**: Sequence-to-sequence model with additive attention mechanism
-- **LSTM + Luong Attention**: Sequence-to-sequence model with multiplicative attention (general, dot, concat variants)
-- **Transformer**: Attention-based architecture following "Attention is All You Need" (Vaswani et al., 2017)
-
-All models support:
-- Training and inference pipelines
-- Comprehensive evaluation with BLEU, ROUGE, and METEOR metrics
-- **BPE / Unigram processing**: Subword-level tokenization strategies
-- **Word-level processing**: Traditional word-based tokenization
-- **Phoneme-level processing**: Phoneme-based tokenization for both English and Vietnamese
-- Autoregressive decoding with state caching
-- Flexible configuration via YAML files and command-line arguments
+All models support BPE, Unigram, and Phoneme tokenization, with BLEU / ROUGE / METEOR evaluation.
 
 ## Project Structure
 
 ```
 Phoneme_NMT/
-├── src/                          # Source code
-│   ├── models/                   # Model implementations
-│   │   ├── base_model.py         # Abstract base model class
-│   │   ├── attention/            # Attention mechanisms (for LSTM models)
-│   │   │   ├── bahdanau.py       # Bahdanau Attention
-│   │   │   └── luong.py          # Luong Attention
-│   │   ├── lstm/                 # LSTM-based models
-│   │   │   ├── encoder.py        # LSTM Encoder
-│   │   │   ├── lstm_bahdanau.py  # LSTM + Bahdanau Attention
-│   │   │   └── lstm_luong.py     # LSTM + Luong Attention
-│   │   └── transformer/          # Transformer (modular architecture)
-│   │       ├── transformer.py    # Main Transformer model
-│   │       ├── encoder.py         # Transformer Encoder
-│   │       ├── decoder.py         # Transformer Decoder
-│   │       ├── blocks/           # Encoder/Decoder layers
-│   │       │   ├── encoder_layer.py
-│   │       │   └── decoder_layer.py
-│   │       ├── layers/           # Core attention & feed-forward layers
-│   │       │   ├── multi_head_attention.py
-│   │       │   ├── scale_dot_product_attention.py
-│   │       │   └── position_wise_feed_forward.py
-│   │       └── embedding/        # Embedding components
-│   │           ├── positional_encoding.py
-│   │           ├── token_embeddings.py
-│   │           └── transformer_embedding.py
-│   ├── training/                 # Training infrastructure
-│   │   └── trainer.py            # Main training class
-│   ├── evaluation/               # Evaluation metrics
-│   │   ├── evaluator.py          # Main evaluation class
-│   │   ├── bleu.py               # BLEU score implementation
-│   │   ├── rouge.py              # ROUGE score implementation
-│   │   └── meteor.py             # METEOR score implementation
-│   ├── data/                     # Data processing
-│   │   ├── data_loader.py        # Data loading utilities
-│   │   ├── preprocessing.py      # Data preprocessing
-│   │   └── vocabs/               # Vocabulary classes
-│   └── utils/                    # Utilities
-│       └── logger.py             # Logging utilities
-├── configs/                      # Configuration files
-│   ├── config.py                 # Config management (Pydantic-based)
-│   ├── lstm_bahdanau.yaml        # LSTM + Bahdanau configuration
-│   ├── lstm_luong.yaml           # LSTM + Luong configuration
-│   └── transformer.yaml          # Transformer configuration
-├── dataset/                      # Raw data directory
-│   └── vocabs/                   # Vocabulary files
-├── checkpoints/                  # Model checkpoints
-├── logs/                         # Training logs
-├── results/                      # Experiment results
-├── main.py                       # Main entry point
-└── test_*.py                     # Test scripts
+├── src/
+│   ├── models/
+│   │   ├── base_model.py           # Abstract base class
+│   │   ├── attention/              # Bahdanau & Luong attention
+│   │   ├── lstm/                   # LSTM Seq2Seq, Bahdanau, Luong
+│   │   └── transformer/            # Transformer (encoder/decoder/layers/embedding)
+│   ├── data/
+│   │   ├── data_loader.py         # Main data loading utilities
+│   │   ├── base_vocab.py           # Base vocabulary class
+│   │   ├── text_utils.py           # Sentence preprocessing
+│   │   ├── constants.py            # Special tokens & IDs
+│   │   ├── helpers.py              # Config helpers
+│   │   ├── word/vocab.py           # Word-level vocab (En + Vi)
+│   │   ├── bpe/vocab.py            # BPE vocab (HuggingFace tokenizers)
+│   │   ├── unigram/vocab.py        # Unigram vocab (HuggingFace tokenizers)
+│   │   └── phoneme/
+│   │       ├── en_vocab.py         # English phoneme vocab
+│   │       ├── vi_vocab.py         # Vietnamese phoneme vocab
+│   │       ├── english_utils.py    # English IPA -> phoneme
+│   │       └── vietnamese_utils.py # Vietnamese syllable analyzer
+│   ├── training/trainer.py         # Training loop
+│   ├── evaluation/                 # BLEU, ROUGE, METEOR
+│   └── utils/logger.py             # Logging
+├── configs/                         # YAML config files (see below)
+├── dataset/vocabs/clean/           # Training data (EN/VI sentence pairs)
+├── checkpoints/                     # Model checkpoints
+├── logs/                            # Training logs
+├── results/                         # Experiment results
+├── main.py                          # Training entry point
+└── evaluate.py                      # Inference & evaluation
 ```
 
 ## Installation
 
-### Prerequisites
-
-- Python 3.8 or higher
-- CUDA-capable GPU (recommended for training)
-
-### Setup
-
-1. **Clone the repository**
-
 ```bash
-git clone https://github.com/tuikhongtenbo/Phoneme_NMT.git
-cd Phoneme_NMT
-```
-
-2. **Create a virtual environment** 
-
-```bash
+# 1. Create and activate virtual environment
+python -m venv venv
 # Windows
-python -m venv venv
 venv\Scripts\activate
-
 # Linux/macOS
-python -m venv venv
 source venv/bin/activate
-```
 
-3. **Install dependencies**
-
-```bash
+# 2. Install dependencies
 pip install -r requirements.txt
 ```
 
-## Usage
+## Configs
 
-### Training
+Each experiment uses a dedicated YAML config. All configs share the same data paths under `dataset/vocabs/clean/`.
 
-#### Running 1 Model with 1 Tokenizer
+| Config | Model | Tokenizer |
+|--------|-------|-----------|
+| `configs/transformer_bpe.yaml` | Transformer | BPE |
+| `configs/transformer_phoneme.yaml` | Transformer | Phoneme |
+| `configs/transformer_unigram.yaml` | Transformer | Unigram |
+| `configs/lstm_seq2seq_bpe.yaml` | LSTM Seq2Seq | BPE |
+| `configs/lstm_seq2seq_phoneme.yaml` | LSTM Seq2Seq | Phoneme |
+| `configs/lstm_seq2seq_unigram.yaml` | LSTM Seq2Seq | Unigram |
+| `configs/lstm_luong_bpe.yaml` | LSTM + Luong | BPE |
+| `configs/lstm_luong_phoneme.yaml` | LSTM + Luong | Phoneme |
+| `configs/lstm_luong_unigram.yaml` | LSTM + Luong | Unigram |
 
-To train a specific model with a specific tokenizer, use the `--config` flag to select the model architecture and the `--level` flag to specify the tokenizer type (e.g., `bpe`, `unigram`, `phoneme`).
+## Training
+
+Run with the specific config file:
 
 ```bash
-# Example 1: Train Transformer model with Phoneme tokenizer
-python main.py --config configs/transformer.yaml --level phoneme
+# Transformer + BPE
+python main.py --config configs/transformer_bpe.yaml
 
-# Example 2: Train LSTM + Luong Attention model with BPE tokenizer
-python main.py --config configs/lstm_luong.yaml --level bpe
+# LSTM + Luong + Phoneme
+python main.py --config configs/lstm_luong_phoneme.yaml
 
-# Example 3: Train LSTM + Bahdanau Attention model with Unigram tokenizer
-python main.py --config configs/lstm_bahdanau.yaml --level unigram
+# LSTM Seq2Seq + Unigram
+python main.py --config configs/lstm_seq2seq_unigram.yaml
 ```
 
-#### Command-Line Arguments
-
-Override configuration parameters via command-line arguments:
+Override config values via CLI arguments:
 
 ```bash
-# Override batch size and number of epochs
-python main.py --config configs/transformer.yaml \
+python main.py --config configs/transformer_bpe.yaml \
+    --num_epochs 10 \
     --batch_size 32 \
-    --num_epochs 20
-
-# Override random seed
-python main.py --config configs/transformer.yaml \
+    --learning_rate 0.0001 \
     --seed 42
 
-# Resume training from checkpoint
-python main.py --config configs/transformer.yaml \
-    --resume checkpoints/transformer/model_epoch_001.pt
-
-# Combine multiple overrides
-python main.py --config configs/transformer.yaml \
-    --batch_size 16 \
-    --num_epochs 10 \
-    --learning_rate 0.0001 \
-    --level phoneme \
-    --max_length 100 \
-    --save_steps 2500 \
-    --seed 123
+# Resume from checkpoint
+python main.py --config configs/transformer_bpe.yaml \
+    --resume checkpoints/transformer_bpe/model_epoch_001.pt
 ```
 
-#### Available Arguments
+## Available Arguments
 
-| Argument | Type | Description | Default |
-|----------|------|-------------|---------|
-| `--config` | str | Path to YAML configuration file | `configs/transformer.yaml` |
-| `--batch_size` | int | Batch size (overrides config) | None |
-| `--num_epochs` | int | Number of training epochs (overrides config) | None |
-| `--learning_rate` | float | Learning rate (overrides config) | None |
-| `--level` | str | Processing level/tokenizer: `bpe`, `unigram`, `phoneme`, or `word` (overrides config) | None |
-| `--max_length` | int | Maximum sequence length (overrides config.data.max_seq_len) | None |
-| `--eval_steps` | int | Evaluate every N steps (overrides config.training.eval_every) | None |
-| `--save_steps` | int | Save checkpoint every N steps (overrides config.training.save_every) | None |
-| `--seed` | int | Random seed for reproducibility (overrides config) | None |
-| `--resume` | str | Path to checkpoint file to resume training | None |
+| Argument | Type | Description |
+|----------|------|-------------|
+| `--config` | str | Path to YAML config file |
+| `--num_epochs` | int | Number of training epochs |
+| `--batch_size` | int | Batch size |
+| `--learning_rate` | float | Learning rate |
+| `--seed` | int | Random seed |
+| `--src_level` | str | Source tokenization level (overrides config) |
+| `--tgt_level` | str | Target tokenization level (overrides config) |
+| `--max_length` | int | Max sequence length |
+| `--eval_steps` | int | Evaluate every N steps |
+| `--save_steps` | int | Save checkpoint every N steps |
+| `--resume` | str | Path to checkpoint to resume from |
 
-**Processing Levels (Tokenizers):**
-- `bpe`: BPE-based tokenization
-- `unigram`: Unigram-based tokenization
-- `phoneme`: Phoneme-level tokenization
-- `word`: Word-level tokenization (builds vocabulary from training data)
+## Evaluation
 
-## Evaluation Metrics
-
-All models are evaluated using standard NMT metrics:
-
-- **BLEU**: BLEU@1, BLEU@2, BLEU@3, BLEU@4
-- **ROUGE**: ROUGE-L (Longest Common Subsequence)
-- **METEOR**: METEOR score
-
-Metrics are computed automatically during validation and can be logged for analysis. Evaluation works consistently across all processing levels (word, phoneme, and pretrained tokenizers).
-
+```bash
+python evaluate.py --checkpoint checkpoints/transformer_bpe/best_model.pt \
+    --config configs/transformer_bpe.yaml
+```

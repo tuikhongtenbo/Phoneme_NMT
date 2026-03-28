@@ -1,0 +1,49 @@
+# LSTM Seq2Seq + Unigram (Experiment 2)
+# EN: BPE, VI: Unigram
+
+model:
+  name: "lstm_seq2seq"
+  embed_dim: 512
+  hidden_dim: 512
+  num_layers: 2
+  dropout: 0.1
+  attention_type: "none"
+
+training:
+  batch_size: 16
+  num_epochs: 10
+  learning_rate: 0.001
+  optimizer: "adam"
+  scheduler: "cosine"
+  clip_grad_norm: 5.0
+  warmup_steps: null
+  eval_every: 1000
+  save_every: 5000
+
+data:
+  sos_id: 1
+  eos_id: 2
+  pad_id: 0
+  unk_id: 3
+
+  source_level: "bpe"
+  target_level: "unigram"
+  tokenizer_type: null
+
+  train_src: "dataset/vocabs/clean/train_end_clean.en"
+  train_tgt: "dataset/vocabs/clean/train_end_clean.vi"
+  dev_src:   "dataset/vocabs/clean/dev_end_clean.en"
+  dev_tgt:   "dataset/vocabs/clean/dev_end_clean.vi"
+  test_src:  "dataset/vocabs/clean/test_end_clean.en"
+  test_tgt:  "dataset/vocabs/clean/test_end_clean.vi"
+
+  vocab_json_train: "dataset/vocabs/clean/full_vocab.json"
+  vocab_json_dev:   "dataset/vocabs/clean/full_vocab.json"
+  vocab_json_test:  "dataset/vocabs/clean/full_vocab.json"
+
+  min_count: 3
+  vocab_size: 16000
+  max_seq_len: 2048
+
+device: "cuda"
+seed: 42

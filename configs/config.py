@@ -58,28 +58,15 @@ class DataConfig(BaseModel):
     pad_id: int = Field(0, description="Padding token ID")
     unk_id: int = Field(3, description="Unknown token ID")
     
-    # Level: 'word' or 'phoneme' (applies to both source and target)
-    source_level: Literal["word", "phoneme"] = Field("word", description="Sequence level: word or phoneme (applies to both source and target)")
-    target_level: Literal["word", "phoneme"] = Field("word", description="Sequence level: word or phoneme (should match source_level)")
-    
+    # Level: 'word', 'phoneme', 'bpe', or 'unigram' (applies to both source and target)
+    source_level: Literal["word", "phoneme", "bpe", "unigram"] = Field("word", description="Source sequence level: word, phoneme, bpe, or unigram")
+    target_level: Literal["word", "phoneme", "bpe", "unigram"] = Field("word", description="Target sequence level: word, phoneme, bpe, or unigram")
+
     # Pretrained tokenizer type: None, "pretrained_1" (mBART->mBART), or "pretrained_2" (mBART->BARTPho)
     tokenizer_type: Optional[Literal["pretrained_1", "pretrained_2"]] = Field(None, description="Pretrained tokenizer type: 'pretrained_1' (mBART->mBART) or 'pretrained_2' (mBART->BARTPho). If set, overrides source_level and target_level.")
-    
-    @validator('target_level')
-    def validate_levels_match(cls, v, values):
-        """Ensure source_level and target_level match (only word or phoneme, not mixed)"""
-        
-        if 'tokenizer_type' in values and values.get('tokenizer_type') is not None:
-            return v
-        if 'source_level' in values:
-            source_level = values.get('source_level')
-            if v != source_level:
-                raise ValueError(
-                    f"source_level and target_level must match. "
-                    f"Got source_level={source_level}, target_level={v}. "
-                    f"Only 'word' or 'phoneme' level is supported (not mixed)."
-                )
-        return v
+
+    # Vocabulary size for BPE and Unigram tokenizers
+    vocab_size: int = Field(16000, ge=100, description="Vocabulary size for BPE/Unigram tokenizers")
     
     # Direct paths to training data files
     train_src: str = Field(..., description="Direct path to training source data file (.en)")

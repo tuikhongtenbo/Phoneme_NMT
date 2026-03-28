@@ -83,7 +83,7 @@ def get_coda(word: str) -> str:
     
     return None
 
-def split_phoneme(word: str) -> list[str, str, str]:
+def split_phoneme(word: str) -> list[str]:
     onset, word = get_onset(word)
     
     medial, word = get_medial(word)
@@ -94,7 +94,7 @@ def split_phoneme(word: str) -> list[str, str, str]:
     
     return onset, medial, nucleus, coda
 
-def analyze_Vietnamese(word: str) -> tuple[bool, tuple]:
+def analyze_Vietnamese(word: str) -> tuple:
     tone, word = get_tone(word)
     if not re.match(r"[a-zA-Zăâđưôơê]", word):
         return None
@@ -309,4 +309,3 @@ def compose_word(onset: str, medial: str, nucleus: str, coda: str):
     word = unicodedata.normalize("NFC", word)
 
     return word
-
