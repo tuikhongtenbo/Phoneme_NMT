@@ -72,7 +72,11 @@ class ViWordVocab:
             else:
                 syllables.append((self.unk_idx, self.padding_idx, self.padding_idx, self.padding_idx))
         syllables.append((self.eos_idx, self.padding_idx, self.padding_idx, self.padding_idx))
-        return torch.tensor(syllables, dtype=torch.long)
+        # Pad to 4-element alignment so the 1D tensor is always reshapeable to (N, 4)
+        flat = [idx for syl in syllables for idx in syl]
+        pad_needed = (4 - len(flat) % 4) % 4
+        flat.extend([self.padding_idx] * pad_needed)
+        return torch.tensor(flat, dtype=torch.long)
 
     def decode_caption(self, caption_vec: torch.Tensor, join_words=True):
         if caption_vec.dim() == 1:
