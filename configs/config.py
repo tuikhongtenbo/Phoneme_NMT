@@ -87,7 +87,8 @@ class DataConfig(BaseModel):
     
     # Vocabulary and sequence settings
     min_count: int = Field(3, ge=1, description="Minimum word count for vocabulary")
-    max_seq_len: int = Field(100, gt=0, description="Maximum sequence length")
+    max_seq_len: int = Field(512, gt=0, description="Maximum sequence length")
+    limit_train: int = Field(0, ge=0, description="Limit training samples (0 = no limit)")
 
 
 class Config(BaseModel):

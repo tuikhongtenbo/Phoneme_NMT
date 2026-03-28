@@ -45,7 +45,7 @@ data:
 
   min_count: 3
   vocab_size: 16000
-  max_seq_len: 100
+  max_seq_len: 512
 
 device: "cuda"
 seed: 42

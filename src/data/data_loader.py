@@ -86,7 +86,7 @@ def create_data_loader(
 
 # --- MAIN DATA LOADING FUNCTIONS ---
 
-def load_pairs(split: str, config: Any) -> List[Tuple[str, str]]:
+def load_pairs(split: str, config: Any, limit: int = None) -> List[Tuple[str, str]]:
     if not config or not hasattr(config, 'data'):
         raise ValueError("Config object with data paths is required")
     
@@ -115,20 +115,26 @@ def load_pairs(split: str, config: Any) -> List[Tuple[str, str]]:
     
     with open(en_path, 'r', encoding='utf-8') as f:
         en_lines = [line.strip() for line in f if line.strip()]
-    
+
     with open(vi_path, 'r', encoding='utf-8') as f:
         vi_lines = [line.strip() for line in f if line.strip()]
-        
+
     if len(en_lines) != len(vi_lines):
         raise ValueError(f"Sentence count mismatch between {en_path} and {vi_path}: {len(en_lines)} vs {len(vi_lines)}")
+
+    if limit and split == 'train':
+        en_lines = en_lines[:limit]
+        vi_lines = vi_lines[:limit]
+        print(f"[OK] Limited train split to {limit} sentence pairs")
 
     print(f"[OK] Loaded {len(en_lines)} sentence pairs from {split} split")
     return list(zip(en_lines, vi_lines))
 
-def prepare_data(splits: List[str], max_len: int, min_count: int = 3, config: Any = None) -> Dict[str, Any]:
+def prepare_data(splits: List[str], max_len: int, min_count: int = 3, config: Any = None, limit_train: int = None) -> Dict[str, Any]:
     all_raw_pairs = {}
     for split in splits:
-        all_raw_pairs[split] = load_pairs(split, config)
+        limit = limit_train if split == 'train' else None
+        all_raw_pairs[split] = load_pairs(split, config, limit=limit)
 
     if 'train' not in all_raw_pairs:
         raise ValueError("Missing 'train' split required for vocabulary building.")
@@ -362,15 +368,14 @@ def prepare_data(splits: List[str], max_len: int, min_count: int = 3, config: An
                 
                 if target_level in ['word', 'bpe', 'unigram', 'pretrained']:
                     vi_len = len(vi_indices)
-                else:  # phoneme
-                    # Phonemes are returned as a flat list, and each word generates 4 tokens + BOS/EOS (total 2 tokens for BOS/EOS)
+                else:  # phoneme — filter by actual token count (not syllable count)
                     if isinstance(vi_indices, torch.Tensor):
-                        vi_len = vi_indices.size(0) // 4
+                        vi_len = vi_indices.size(0)
                     elif isinstance(vi_indices, list):
-                        vi_len = len(vi_indices) // 4
+                        vi_len = len(vi_indices)
                     else:
                         vi_len = 0
-                
+
                 if en_len <= max_len and vi_len <= max_len:
                     current_indexed_pairs.append((en_indices, vi_indices))
                     

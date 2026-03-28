@@ -238,7 +238,8 @@ def main():
         splits=data_splits,
         max_len=config.data.max_seq_len,
         min_count=config.data.min_count,
-        config=config
+        config=config,
+        limit_train=getattr(config.data, 'limit_train', None) or None
     )
     
     input_vocab = data_result['input_vocab']
