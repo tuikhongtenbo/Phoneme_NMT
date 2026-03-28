@@ -22,13 +22,12 @@ Phoneme_NMT/
 │   │   └── transformer/            # Transformer (encoder/decoder/layers/embedding)
 │   ├── data/
 │   │   ├── data_loader.py         # Main data loading utilities
-│   │   ├── base_vocab.py           # Base vocabulary class
 │   │   ├── text_utils.py           # Sentence preprocessing
 │   │   ├── constants.py            # Special tokens & IDs
 │   │   ├── helpers.py              # Config helpers
 │   │   ├── word/vocab.py           # Word-level vocab (En + Vi)
 │   │   ├── bpe/vocab.py            # BPE vocab (HuggingFace tokenizers)
-│   │   ├── unigram/vocab.py        # Unigram vocab (HuggingFace tokenizers)
+│   │   ├── unigram/vocab.py       # Unigram vocab (HuggingFace tokenizers)
 │   │   └── phoneme/
 │   │       ├── en_vocab.py         # English phoneme vocab
 │   │       ├── vi_vocab.py         # Vietnamese phoneme vocab

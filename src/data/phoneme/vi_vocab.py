@@ -35,7 +35,7 @@ class ViWordVocab:
     def _build_vocab(self, config):
         if not hasattr(config, 'data') or not hasattr(config.data, 'train_tgt'):
             print("[WARN] Config missing data.train_tgt — building empty vocab")
-            return set()
+            return []
 
         paths = [config.data.train_tgt]
         if hasattr(config.data, 'dev_tgt'):
@@ -59,7 +59,7 @@ class ViWordVocab:
                         if components:
                             phonemes.update(p for p in components if p)
         print(f"[OK] Built Vietnamese phoneme vocabulary with {len(phonemes)} unique phonemes")
-        return phonemes
+        return list(phonemes)
 
     def encode_caption(self, caption: List[str]) -> torch.Tensor:
         syllables = [(self.bos_idx, self.padding_idx, self.padding_idx, self.padding_idx)]
