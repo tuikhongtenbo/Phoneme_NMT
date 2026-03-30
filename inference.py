@@ -145,30 +145,47 @@ class NMTInferrer:
 
     def _greedy_decode(self, src_tensor: torch.Tensor) -> list:
         """Greedy autoregressive decoding: argmax at each step."""
-        batch_size = src_tensor.size(0)
         device = src_tensor.device
+        model_name = self.config.model.name.lower()
 
-        # Encode source
-        enc_out = self.model.encode(src_tensor)
+        if model_name == "transformer":
+            # Transformer: encode once, then autoregressive decode
+            _ = self.model.encode(src_tensor)
+            src_mask = (src_tensor != self.pad_id).unsqueeze(1)
+            generated = [self.sos_id]
+            for _ in range(self.max_len - 1):
+                tgt_tensor = torch.tensor([generated], dtype=torch.long, device=device)
+                logits = self.model(tgt_tensor, src_mask=src_mask)
+                next_token = logits[0, -1, :].argmax(dim=-1).item()
+                if next_token == self.eos_id:
+                    break
+                generated.append(next_token)
 
-        # Build source padding mask
-        src_mask = (src_tensor != self.pad_id).unsqueeze(1)  # (1, 1, L)
+        elif model_name in ("lstm_seq2seq", "lstm_bahdanau", "lstm_luong"):
+            # LSTM: encode source to get hidden state
+            encoder_output = self.model.encode(src_tensor)
+            # encoder_output is (enc_outputs, (hidden, cell)) for LSTM
+            hidden = encoder_output[1]  # (num_layers, batch, hidden_dim)
+            cell = encoder_output[2] if len(encoder_output) > 2 else None
 
-        # Initialize with SOS
-        generated = [self.sos_id]
+            generated = [self.sos_id]
+            decoder_input = torch.tensor([[self.sos_id]], dtype=torch.long, device=device)
 
-        for _ in range(self.max_len - 1):
-            tgt_tensor = torch.tensor([generated], dtype=torch.long, device=device)
+            for _ in range(self.max_len - 1):
+                logits, (hidden, cell) = self.model.decode_step(
+                    decoder_input, encoder_output, past_key_values=(hidden, cell)
+                )
+                # decode_step returns (batch, vocab) or (1, vocab)
+                if logits.dim() == 2 and logits.size(0) > 1:
+                    logits = logits.squeeze(0)
+                next_token = logits.argmax(dim=-1).item()
+                if next_token == self.eos_id:
+                    break
+                generated.append(next_token)
+                decoder_input = torch.tensor([[next_token]], dtype=torch.long, device=device)
 
-            # Forward through model
-            logits = self.model(tgt_tensor, src_mask=src_mask)  # (1, seq_len, vocab)
-            next_token_logits = logits[0, -1, :]  # (vocab,)
-            next_token = next_token_logits.argmax(dim=-1).item()
-
-            if next_token == self.eos_id:
-                break
-
-            generated.append(next_token)
+        else:
+            raise ValueError(f"Unsupported model for inference: {model_name}")
 
         return generated
 
