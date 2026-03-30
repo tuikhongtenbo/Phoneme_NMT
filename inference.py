@@ -217,7 +217,7 @@ def load_vocabularies(config: Config):
 # ─── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description="Interactive NMT Inference")
+    parser = argparse.ArgumentParser(description="NMT Inference — EN -> VI")
     parser.add_argument("--checkpoint", type=str, required=True, help="Path to checkpoint")
     parser.add_argument("--config", type=str, default="configs/transformer_phoneme.yaml",
                         help="Path to config YAML")
@@ -225,6 +225,12 @@ def main():
                         help="Override max generation length")
     parser.add_argument("--test_src",  type=str, default=None, help="Test source path (overrides config)")
     parser.add_argument("--test_tgt",  type=str, default=None, help="Test target path (overrides config)")
+    parser.add_argument("--text", type=str, default=None,
+                        help="English sentence to translate (non-interactive mode)")
+    parser.add_argument("--file", type=str, default=None,
+                        help="Text file with one sentence per line to translate (non-interactive mode)")
+    parser.add_argument("--output", type=str, default=None,
+                        help="Output file for translations (used with --file)")
     args = parser.parse_args()
 
     checkpoint_path = Path(args.checkpoint)
