@@ -164,6 +164,12 @@ def main():
         help="Maximum sequence length (overrides config.data.max_seq_len)"
     )
     parser.add_argument(
+        "--max_seq_len",
+        type=int,
+        default=None,
+        help="Maximum sequence length alias for --max_length (overrides config.data.max_seq_len)"
+    )
+    parser.add_argument(
         "--save_steps",
         type=int,
         default=None,
@@ -190,6 +196,8 @@ def main():
         config.training.eval_every = args.eval_steps
     if args.max_length is not None:
         config.data.max_seq_len = args.max_length
+    if args.max_seq_len is not None:
+        config.data.max_seq_len = args.max_seq_len
     if args.save_steps is not None:
         config.training.save_every = args.save_steps
     if args.pretrained_mode is not None:

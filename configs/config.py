@@ -22,17 +22,17 @@ class ModelConfig(BaseModel):
     decoder_layers: Optional[int] = Field(None, description="Number of decoder layers")
     
     # For LSTM models
-    attention_type: Optional[str] = Field(None, description="Attention type: bahdanau, general, dot, concat")
-    
+    attention_type: Optional[str] = Field(None, description="Attention type: none, bahdanau, general, dot, concat")
+
     # For Transformer models
     num_heads: Optional[int] = Field(8, description="Number of attention heads")
     ff_dim: Optional[int] = Field(2048, description="Feed-forward dimension")
-    
+
     @validator('attention_type')
     def validate_attention_type(cls, v):
         """Validate attention type"""
-        if v is not None and v not in ['bahdanau', 'general', 'dot', 'concat']:
-            raise ValueError(f"Invalid attention_type: {v}. Must be one of: bahdanau, general, dot, concat")
+        if v is not None and v not in ['none', 'bahdanau', 'general', 'dot', 'concat']:
+            raise ValueError(f"Invalid attention_type: {v}. Must be one of: none, bahdanau, general, dot, concat")
         return v
 
 
