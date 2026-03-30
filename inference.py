@@ -281,7 +281,40 @@ def main():
     print("  Target level:", target_level.upper())
     print("=" * 60 + "\n")
 
-    # Interactive loop
+    # ── Non-interactive: translate from --file ─────────────────────────────────
+    if args.file:
+        if not Path(args.file).exists():
+            print(f"[ERROR] File not found: {args.file}")
+            return
+        output_file = args.output or args.file.replace(".txt", "_translated.txt")
+        results = []
+        with open(args.file, 'r', encoding='utf-8') as f:
+            lines = [l.strip() for l in f if l.strip()]
+        for i, line in enumerate(lines):
+            print(f"[{i+1}/{len(lines)}] {line}")
+            try:
+                pred = inferrer.translate(line)
+            except Exception as e:
+                pred = f"[ERROR] {e}"
+            print(f"  -> {pred}")
+            results.append(pred)
+        with open(output_file, 'w', encoding='utf-8') as f:
+            for src, tgt in zip(lines, results):
+                f.write(f"{src}\t{tgt}\n")
+        print(f"\nSaved {len(results)} translations to: {output_file}")
+        return
+
+    # ── Non-interactive: translate single sentence via --text ───────────────────
+    if args.text:
+        print(f"[EN] > {args.text}")
+        try:
+            pred = inferrer.translate(args.text)
+        except Exception as e:
+            pred = f"[ERROR] {e}"
+        print(f"[VI] > {pred}")
+        return
+
+    # ── Interactive loop ───────────────────────────────────────────────────────
     while True:
         try:
             user_input = input("\n[EN] > ").strip()
