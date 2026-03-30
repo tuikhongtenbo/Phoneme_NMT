@@ -162,7 +162,7 @@ class NMTInferrer:
                 generated.append(next_token)
 
         elif model_name in ("lstm_seq2seq", "lstm_bahdanau", "lstm_luong"):
-            # LSTM: encode source to get hidden state
+            # LSTM: encode source to get hidden/cell state
             encoder_output = self.model.encode(src_tensor)
             # encoder_output is (enc_outputs, (hidden, cell)) for LSTM
             hidden = encoder_output[1]  # (num_layers, batch, hidden_dim)
@@ -172,13 +172,14 @@ class NMTInferrer:
             decoder_input = torch.tensor([[self.sos_id]], dtype=torch.long, device=device)
 
             for _ in range(self.max_len - 1):
-                logits, (hidden, cell) = self.model.decode_step(
+                # decode_step returns (prediction, (hidden, cell)) — MUST unpack
+                prediction, (hidden, cell) = self.model.decode_step(
                     decoder_input, encoder_output, past_key_values=(hidden, cell)
                 )
-                # decode_step returns (batch, vocab) or (1, vocab)
-                if logits.dim() == 2 and logits.size(0) > 1:
-                    logits = logits.squeeze(0)
-                next_token = logits.argmax(dim=-1).item()
+                # prediction shape: (1, vocab) or (batch, vocab)
+                if prediction.dim() == 2 and prediction.size(0) > 1:
+                    prediction = prediction.squeeze(0)
+                next_token = prediction.argmax(dim=-1).item()
                 if next_token == self.eos_id:
                     break
                 generated.append(next_token)
