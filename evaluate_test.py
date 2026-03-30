@@ -66,10 +66,12 @@ def main():
                         help="Path to config YAML file")
     parser.add_argument("--batch_size", type=int, default=None,
                         help="Batch size (overrides config)")
-    parser.add_argument("--test_src", type=str, default=None,
-                        help="Path to test source file (overrides config)")
-    parser.add_argument("--test_tgt", type=str, default=None,
-                        help="Path to test target file (overrides config)")
+    parser.add_argument("--train_src", type=str, default=None, help="Path to train source (overrides config)")
+    parser.add_argument("--train_tgt", type=str, default=None, help="Path to train target (overrides config)")
+    parser.add_argument("--dev_src",   type=str, default=None, help="Path to dev source (overrides config)")
+    parser.add_argument("--dev_tgt",   type=str, default=None, help="Path to dev target (overrides config)")
+    parser.add_argument("--test_src",  type=str, default=None, help="Path to test source (overrides config)")
+    parser.add_argument("--test_tgt",  type=str, default=None, help="Path to test target (overrides config)")
     args = parser.parse_args()
 
     checkpoint_path = Path(args.checkpoint)
@@ -82,6 +84,14 @@ def main():
     # Override batch size if provided
     if args.batch_size is not None:
         config.training.batch_size = args.batch_size
+    if args.train_src is not None:
+        config.data.train_src = args.train_src
+    if args.train_tgt is not None:
+        config.data.train_tgt = args.train_tgt
+    if args.dev_src is not None:
+        config.data.dev_src = args.dev_src
+    if args.dev_tgt is not None:
+        config.data.dev_tgt = args.dev_tgt
     if args.test_src is not None:
         config.data.test_src = args.test_src
     if args.test_tgt is not None:
