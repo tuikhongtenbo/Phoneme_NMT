@@ -175,7 +175,43 @@ def main():
         default=None,
         help="Save checkpoint every N steps (overrides config.training.save_every)"
     )
-    
+    parser.add_argument(
+        "--train_src",
+        type=str,
+        default=None,
+        help="Path to training source file (overrides config.data.train_src)"
+    )
+    parser.add_argument(
+        "--train_tgt",
+        type=str,
+        default=None,
+        help="Path to training target file (overrides config.data.train_tgt)"
+    )
+    parser.add_argument(
+        "--dev_src",
+        type=str,
+        default=None,
+        help="Path to dev source file (overrides config.data.dev_src)"
+    )
+    parser.add_argument(
+        "--dev_tgt",
+        type=str,
+        default=None,
+        help="Path to dev target file (overrides config.data.dev_tgt)"
+    )
+    parser.add_argument(
+        "--test_src",
+        type=str,
+        default=None,
+        help="Path to test source file (overrides config.data.test_src)"
+    )
+    parser.add_argument(
+        "--test_tgt",
+        type=str,
+        default=None,
+        help="Path to test target file (overrides config.data.test_tgt)"
+    )
+
     args = parser.parse_args()
     
     # Load configuration
@@ -200,6 +236,18 @@ def main():
         config.data.max_seq_len = args.max_seq_len
     if args.save_steps is not None:
         config.training.save_every = args.save_steps
+    if args.train_src is not None:
+        config.data.train_src = args.train_src
+    if args.train_tgt is not None:
+        config.data.train_tgt = args.train_tgt
+    if args.dev_src is not None:
+        config.data.dev_src = args.dev_src
+    if args.dev_tgt is not None:
+        config.data.dev_tgt = args.dev_tgt
+    if args.test_src is not None:
+        config.data.test_src = args.test_src
+    if args.test_tgt is not None:
+        config.data.test_tgt = args.test_tgt
     if args.pretrained_mode is not None:
         config.data.tokenizer_type = args.pretrained_mode
     else:
