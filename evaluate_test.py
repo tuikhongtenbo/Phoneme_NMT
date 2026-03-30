@@ -66,6 +66,10 @@ def main():
                         help="Path to config YAML file")
     parser.add_argument("--batch_size", type=int, default=None,
                         help="Batch size (overrides config)")
+    parser.add_argument("--test_src", type=str, default=None,
+                        help="Path to test source file (overrides config)")
+    parser.add_argument("--test_tgt", type=str, default=None,
+                        help="Path to test target file (overrides config)")
     args = parser.parse_args()
 
     checkpoint_path = Path(args.checkpoint)
@@ -78,6 +82,10 @@ def main():
     # Override batch size if provided
     if args.batch_size is not None:
         config.training.batch_size = args.batch_size
+    if args.test_src is not None:
+        config.data.test_src = args.test_src
+    if args.test_tgt is not None:
+        config.data.test_tgt = args.test_tgt
 
     # Setup logger
     log_dir = Path("logs") / config.model.name
