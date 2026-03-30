@@ -44,7 +44,8 @@ class TestDataset(Dataset):
         return len(self.pairs)
 
     def __getitem__(self, idx):
-        return self.pairs[idx]
+        src, tgt = self.pairs[idx]
+        return torch.tensor(src, dtype=torch.long), torch.tensor(tgt, dtype=torch.long)
 
 
 def collate_test(batch):

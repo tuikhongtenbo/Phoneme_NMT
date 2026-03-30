@@ -370,9 +370,67 @@ def main():
     # Start training
     logger.info("\nStarting training...")
     trainer.train(resume_from=args.resume)
-    
+
     logger.info("\nTraining completed successfully!")
     logger.info(f"Best model saved to: {trainer.checkpoint_dir / 'best_model.pt'}")
+
+    # ── Evaluate on test set ────────────────────────────────────────────────
+    if test_loader is not None:
+        best_model_path = trainer.checkpoint_dir / "best_model.pt"
+        if best_model_path.exists():
+            logger.info("\n" + "=" * 80)
+            logger.info("Loading best model for test evaluation...")
+            logger.info("=" * 80)
+
+            # Load best checkpoint (only model state dict needed)
+            checkpoint = torch.load(best_model_path, map_location='cpu')
+            trainer.model.load_state_dict(checkpoint['model_state_dict'])
+
+            # Evaluate on test set
+            logger.info("Evaluating on test set...")
+            test_metrics = trainer.evaluate(test_loader)
+
+            logger.info("\n" + "=" * 80)
+            logger.info("TEST SET RESULTS")
+            logger.info("=" * 80)
+            logger.info(f"  Test Loss:       {test_metrics['loss']:.4f}")
+            logger.info(f"  Test Perplexity: {test_metrics['perplexity']:.2f}")
+            logger.info(f"  Test BLEU:       {test_metrics.get('bleu', 0.0):.4f}")
+            if 'bleu_1' in test_metrics:
+                logger.info(f"  BLEU-1: {test_metrics['bleu_1']:.4f}")
+                logger.info(f"  BLEU-2: {test_metrics['bleu_2']:.4f}")
+                logger.info(f"  BLEU-3: {test_metrics['bleu_3']:.4f}")
+                logger.info(f"  BLEU-4: {test_metrics['bleu_4']:.4f}")
+            if 'rouge_l' in test_metrics:
+                logger.info(f"  ROUGE-L: {test_metrics['rouge_l']:.4f}")
+            if 'meteor' in test_metrics:
+                logger.info(f"  METEOR:  {test_metrics['meteor']:.4f}")
+            logger.info("=" * 80)
+
+            # Save results
+            results_path = trainer.checkpoint_dir / "test_results.txt"
+            with open(results_path, "w", encoding="utf-8") as f:
+                f.write(f"Checkpoint: {best_model_path}\n")
+                f.write(f"Test Loss: {test_metrics['loss']:.4f}\n")
+                f.write(f"Test Perplexity: {test_metrics['perplexity']:.2f}\n")
+                f.write(f"Test BLEU: {test_metrics.get('bleu', 0.0):.4f}\n")
+                if 'bleu_1' in test_metrics:
+                    f.write(f"BLEU-1: {test_metrics['bleu_1']:.4f}\n")
+                    f.write(f"BLEU-2: {test_metrics['bleu_2']:.4f}\n")
+                    f.write(f"BLEU-3: {test_metrics['bleu_3']:.4f}\n")
+                    f.write(f"BLEU-4: {test_metrics['bleu_4']:.4f}\n")
+                if 'rouge_l' in test_metrics:
+                    f.write(f"ROUGE-L: {test_metrics['rouge_l']:.4f}\n")
+                if 'meteor' in test_metrics:
+                    f.write(f"METEOR: {test_metrics['meteor']:.4f}\n")
+            logger.info(f"Results saved to: {results_path}")
+        else:
+            logger.warning(
+                f"best_model.pt not found at {best_model_path}. "
+                "Test evaluation skipped. (This may happen if no checkpoint improved over the initial model.)"
+            )
+    else:
+        logger.info("No test data available. Test evaluation skipped."))
 
 
 if __name__ == "__main__":
