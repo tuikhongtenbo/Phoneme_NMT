@@ -523,12 +523,14 @@ class Trainer:
                         if is_best:
                             self.best_dev_bleu = dev_metrics.get('bleu', 0.0)
                             self.logger.info(f"New best dev BLEU: {self.best_dev_bleu:.4f}")
+                            self.save_checkpoint(is_best=True)  
                     else:
                         is_best = dev_metrics['loss'] < self.best_dev_loss
                         if is_best:
                             self.best_dev_loss = dev_metrics['loss']
                             self.logger.info(f"New best dev loss: {self.best_dev_loss:.4f}")
-                
+                            self.save_checkpoint(is_best=True)  
+
                 # Save checkpoint
                 if self.global_step % self.save_every == 0:
                     self.save_checkpoint(is_best=False, suffix=f"_step{self.global_step}")
@@ -556,13 +558,17 @@ class Trainer:
                     if is_best:
                         self.best_dev_bleu = dev_metrics.get('bleu', 0.0)
                         self.logger.info(f"  [BEST] New best dev BLEU: {self.best_dev_bleu:.4f}")
+                        self.save_checkpoint(is_best=True)  
                 else:
                     is_best = dev_metrics['loss'] < self.best_dev_loss
                     if is_best:
                         self.best_dev_loss = dev_metrics['loss']
                         self.logger.info(f"  [BEST] New best dev loss: {self.best_dev_loss:.4f}")
-                
-                self.save_checkpoint(is_best=is_best)
+                        self.save_checkpoint(is_best=True)  
+
+                # Only save regular checkpoint if not already saved as best above
+                if not is_best:
+                    self.save_checkpoint(is_best=False)
             else:
                 self.save_checkpoint(is_best=False)
             

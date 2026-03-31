@@ -430,7 +430,7 @@ def main():
                 "Test evaluation skipped. (This may happen if no checkpoint improved over the initial model.)"
             )
     else:
-        logger.info("No test data available. Test evaluation skipped."))
+        logger.info("No test data available. Test evaluation skipped.")
 
 
 if __name__ == "__main__":
