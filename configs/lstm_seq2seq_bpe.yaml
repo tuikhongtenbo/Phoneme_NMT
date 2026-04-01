@@ -18,7 +18,7 @@ training:
   clip_grad_norm: 5.0
   warmup_steps: null
   eval_every: 1000
-  save_every: 5000
+  save_every: 10000
 
 data:
   sos_id: 1
