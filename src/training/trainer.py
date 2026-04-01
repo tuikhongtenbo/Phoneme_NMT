@@ -405,13 +405,12 @@ class Trainer:
         return metrics
     
     
-    def save_checkpoint(self, is_best: bool = False, suffix: str = ""):
+    def save_checkpoint(self, is_best: bool = False):
         """
         Save model checkpoint.
         
         Args:
             is_best: Whether this is the best model so far
-            suffix: Optional suffix for checkpoint filename
         """
         checkpoint = {
             'epoch': self.current_epoch,
@@ -423,11 +422,6 @@ class Trainer:
             'best_dev_bleu': self.best_dev_bleu,
             'config': self.config.model_dump() if hasattr(self.config, 'model_dump') else (self.config.dict() if hasattr(self.config, 'dict') else str(self.config))
         }
-        
-        # Save regular checkpoint
-        checkpoint_path = self.checkpoint_dir / f"checkpoint_epoch{self.current_epoch}_step{self.global_step}{suffix}.pt"
-        torch.save(checkpoint, checkpoint_path)
-        self.logger.info(f"Saved checkpoint: {checkpoint_path}")
         
         # Save best model
         if is_best:
@@ -531,9 +525,7 @@ class Trainer:
                             self.logger.info(f"New best dev loss: {self.best_dev_loss:.4f}")
                             self.save_checkpoint(is_best=True)  
 
-                # Save checkpoint
-                if self.global_step % self.save_every == 0:
-                    self.save_checkpoint(is_best=False, suffix=f"_step{self.global_step}")
+                # No intermediate checkpoint saves — only best_model.pt is kept
             
             # Epoch summary
             avg_loss = epoch_loss / num_batches if num_batches > 0 else 0.0
@@ -566,11 +558,7 @@ class Trainer:
                         self.logger.info(f"  [BEST] New best dev loss: {self.best_dev_loss:.4f}")
                         self.save_checkpoint(is_best=True)  
 
-                # Only save regular checkpoint if not already saved as best above
-                if not is_best:
-                    self.save_checkpoint(is_best=False)
-            else:
-                self.save_checkpoint(is_best=False)
+                # No checkpoint saved at end of epoch — only best_model.pt is kept
             
             # Update learning rate for epoch-based schedulers
             if self.scheduler and isinstance(self.scheduler, (optim.lr_scheduler.CosineAnnealingLR, 
