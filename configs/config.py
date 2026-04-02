@@ -49,6 +49,7 @@ class TrainingConfig(BaseModel):
     # Evaluation
     eval_every: int = Field(1000, gt=0, description="Evaluate every N steps")
     save_every: int = Field(5000, gt=0, description="Save checkpoint every N steps")
+    early_stopping_patience: int = Field(0, ge=0, description="Stop training if BLEU on dev doesn't improve for N consecutive evals (0 = disable)")
 
 
 class DataConfig(BaseModel):

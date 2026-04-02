@@ -176,6 +176,12 @@ def main():
         help="Save checkpoint every N steps (overrides config.training.save_every)"
     )
     parser.add_argument(
+        "--patience",
+        type=int,
+        default=None,
+        help="Early stopping patience: stop if BLEU on dev doesn't improve for N evals (0 or omitted = disable)"
+    )
+    parser.add_argument(
         "--train_src",
         type=str,
         default=None,
@@ -236,6 +242,8 @@ def main():
         config.data.max_seq_len = args.max_seq_len
     if args.save_steps is not None:
         config.training.save_every = args.save_steps
+    if args.patience is not None:
+        config.training.early_stopping_patience = args.patience
     if args.train_src is not None:
         config.data.train_src = args.train_src
     if args.train_tgt is not None:
@@ -274,6 +282,8 @@ def main():
     logger.info(f"Model: {config.model.name}")
     logger.info(f"Batch size: {config.training.batch_size}")
     logger.info(f"Number of epochs: {config.training.num_epochs}")
+    patience = config.training.early_stopping_patience
+    logger.info(f"Early stopping patience: {patience if patience > 0 else 'disabled'}")
     if config.data.tokenizer_type:
         logger.info(f"Tokenizer type: {config.data.tokenizer_type}")
         logger.info(f"  - pretrained_1: mBART (EN) -> mBART (VI)")

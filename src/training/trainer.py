@@ -97,7 +97,11 @@ class Trainer:
         self.current_epoch = 0
         self.best_dev_loss = float('inf')
         self.best_dev_bleu = 0.0
-        self.metric_for_best = 'bleu'  
+        self.metric_for_best = 'bleu'
+
+        # Early stopping state
+        self.patience = getattr(config.training, 'early_stopping_patience', 0)
+        self.patience_counter = 0  
         
         # Checkpoint directory
         self.checkpoint_dir = Path("checkpoints")
@@ -105,6 +109,9 @@ class Trainer:
         
         # Evaluator
         self.evaluator = Evaluator(metrics=['bleu', 'rouge_l', 'meteor'])
+
+        if self.patience > 0:
+            self.logger.info(f"Early stopping enabled: patience = {self.patience}")
         
     def _create_optimizer(self) -> optim.Optimizer:
         """Create optimizer based on config."""
@@ -420,6 +427,7 @@ class Trainer:
             'scheduler_state_dict': self.scheduler.state_dict() if self.scheduler else None,
             'best_dev_loss': self.best_dev_loss,
             'best_dev_bleu': self.best_dev_bleu,
+            'patience_counter': self.patience_counter,
             'config': self.config.model_dump() if hasattr(self.config, 'model_dump') else (self.config.dict() if hasattr(self.config, 'dict') else str(self.config))
         }
         
@@ -447,6 +455,7 @@ class Trainer:
         self.global_step = checkpoint.get('global_step', 0)
         self.best_dev_loss = checkpoint.get('best_dev_loss', float('inf'))
         self.best_dev_bleu = checkpoint.get('best_dev_bleu', 0.0)
+        self.patience_counter = checkpoint.get('patience_counter', 0)
         
         self.logger.info(f"Loaded checkpoint from {checkpoint_path}")
         self.logger.info(f"Resuming from epoch {self.current_epoch}, step {self.global_step}")
@@ -510,20 +519,35 @@ class Trainer:
                                    f"Perplexity: {dev_metrics['perplexity']:.2f}")
                     if 'bleu' in dev_metrics:
                         self.logger.info(f"Dev BLEU: {dev_metrics['bleu']:.4f}")
-                    
-                    # Save if best (based on BLEU)
+
+                    # Check for improvement and save best model
                     if self.metric_for_best == 'bleu':
                         is_best = dev_metrics.get('bleu', 0.0) > self.best_dev_bleu
                         if is_best:
                             self.best_dev_bleu = dev_metrics.get('bleu', 0.0)
                             self.logger.info(f"New best dev BLEU: {self.best_dev_bleu:.4f}")
-                            self.save_checkpoint(is_best=True)  
+                            self.save_checkpoint(is_best=True)
+                            self.patience_counter = 0  # Reset counter on improvement
+                        else:
+                            self.patience_counter += 1
                     else:
                         is_best = dev_metrics['loss'] < self.best_dev_loss
                         if is_best:
                             self.best_dev_loss = dev_metrics['loss']
                             self.logger.info(f"New best dev loss: {self.best_dev_loss:.4f}")
-                            self.save_checkpoint(is_best=True)  
+                            self.save_checkpoint(is_best=True)
+                            self.patience_counter = 0
+                        else:
+                            self.patience_counter += 1
+
+                    # Early stopping check
+                    if self.patience > 0 and self.patience_counter >= self.patience:
+                        self.logger.info(
+                            f"\nEarly stopping triggered! BLEU on dev hasn't improved "
+                            f"for {self.patience_counter} consecutive evaluations. "
+                            f"Best dev BLEU: {self.best_dev_bleu:.4f}"
+                        )
+                        return  # Exit training loop
 
                 # No intermediate checkpoint saves — only best_model.pt is kept
             
@@ -550,13 +574,28 @@ class Trainer:
                     if is_best:
                         self.best_dev_bleu = dev_metrics.get('bleu', 0.0)
                         self.logger.info(f"  [BEST] New best dev BLEU: {self.best_dev_bleu:.4f}")
-                        self.save_checkpoint(is_best=True)  
+                        self.save_checkpoint(is_best=True)
+                        self.patience_counter = 0
+                    elif self.patience > 0:
+                        self.patience_counter += 1
                 else:
                     is_best = dev_metrics['loss'] < self.best_dev_loss
                     if is_best:
                         self.best_dev_loss = dev_metrics['loss']
                         self.logger.info(f"  [BEST] New best dev loss: {self.best_dev_loss:.4f}")
-                        self.save_checkpoint(is_best=True)  
+                        self.save_checkpoint(is_best=True)
+                        self.patience_counter = 0
+                    elif self.patience > 0:
+                        self.patience_counter += 1
+
+                # Early stopping check
+                if self.patience > 0 and self.patience_counter >= self.patience:
+                    self.logger.info(
+                        f"\nEarly stopping triggered! BLEU on dev hasn't improved "
+                        f"for {self.patience_counter} consecutive evaluations. "
+                        f"Best dev BLEU: {self.best_dev_bleu:.4f}"
+                    )
+                    return  # Exit training loop
 
                 # No checkpoint saved at end of epoch — only best_model.pt is kept
             
