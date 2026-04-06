@@ -90,7 +90,8 @@ def decode_indices(indices: list, vocab) -> str:
     return ' '.join(tokens)
 
 
-def greedy_decode(model, src_seq: torch.Tensor, sos_id: int, eos_id: int, pad_id: int, max_len: int = 100) -> list:
+def greedy_decode(model, src_seq: torch.Tensor, sos_id: int, eos_id: int, pad_id: int,
+                  max_len: int = 100, no_repeat_ngram_size: int = 3) -> list:
     """Greedy decoding for a single source sequence."""
     device = next(model.parameters()).device
     src_seq = src_seq.to(device)
@@ -113,9 +114,18 @@ def greedy_decode(model, src_seq: torch.Tensor, sos_id: int, eos_id: int, pad_id
             )
 
             if isinstance(logits, torch.Tensor):
-                next_token = logits.argmax(dim=-1).item()
+                logits = logits.squeeze(0)
             else:
-                next_token = torch.argmax(logits, dim=-1).item()
+                logits = torch.tensor(logits).squeeze(0)
+
+            next_token = logits.argmax(dim=-1).item()
+
+            # Penalize n-gram repetition: if last (n-1) tokens == preceding (n-1), penalize
+            if no_repeat_ngram_size > 0 and len(output_tokens) >= no_repeat_ngram_size - 1:
+                ngram = tuple(output_tokens[-(no_repeat_ngram_size - 1):]) + (next_token,)
+                if ngram[:-1] == ngram[1:]:
+                    logits[next_token] -= 3.0
+                    next_token = logits.argmax(dim=-1).item()
 
             output_tokens.append(next_token)
 
@@ -126,7 +136,8 @@ def greedy_decode(model, src_seq: torch.Tensor, sos_id: int, eos_id: int, pad_id
 
 
 def beam_decode(model, src_seq: torch.Tensor, sos_id: int, eos_id: int, pad_id: int,
-                max_len: int = 100, beam_size: int = 5) -> str:
+                max_len: int = 100, beam_size: int = 5,
+                no_repeat_ngram_size: int = 3) -> list:
     """Beam search decoding for a single source sequence."""
     device = next(model.parameters()).device
     src_seq = src_seq.to(device)
@@ -165,6 +176,11 @@ def beam_decode(model, src_seq: torch.Tensor, sos_id: int, eos_id: int, pad_id: 
 
                 for log_p, idx in zip(topk.values, topk.indices):
                     idx = idx.item()
+                    # Penalize n-gram repetition
+                    if no_repeat_ngram_size > 0 and len(seq) >= no_repeat_ngram_size - 1:
+                        ngram = tuple(seq[-(no_repeat_ngram_size - 1):]) + (idx,)
+                        if ngram[:-1] == ngram[1:]:
+                            log_p = log_p - 3.0
                     new_seq = seq + [idx]
                     all_candidates.append((log_prob + log_p.item(), new_seq))
 
@@ -181,7 +197,7 @@ def beam_decode(model, src_seq: torch.Tensor, sos_id: int, eos_id: int, pad_id: 
         if not all_candidates:
             return ""
 
-        all_candidates.sort(key=lambda x: x[0] / (len(x[1]) ** 0.7 + 1e-9), reverse=True)
+        all_candidates.sort(key=lambda x: x[0] / (len(x[1]) ** 0.5 + 5.0), reverse=True)
         best_seq = all_candidates[0][1]
 
         return [t for t in best_seq if t != sos_id and t != eos_id]
@@ -198,6 +214,8 @@ def main():
     parser.add_argument("--output_dir", type=str, default="results", help="Output directory")
     parser.add_argument("--batch_size", type=int, default=None, help="Batch size override")
     parser.add_argument("--seed", type=int, default=None, help="Random seed override")
+    parser.add_argument("--no_repeat_ngram", type=int, default=3,
+                        help="Prevent repeating n-grams of this size during decoding (0=disabled)")
     args = parser.parse_args()
 
     # Load config
@@ -229,6 +247,7 @@ def main():
     logger.info(f"Checkpoint: {args.checkpoint}")
     logger.info(f"Split: {args.split}")
     logger.info(f"Beam size: {args.beam_size}")
+    logger.info(f"no_repeat_ngram: {args.no_repeat_ngram}")
     logger.info("=" * 60)
 
     # Prepare data
@@ -295,9 +314,11 @@ def main():
 
             # Decode
             if args.beam_size > 1:
-                pred_ids = beam_decode(model, src_i, sos_id, eos_id, pad_id, args.max_len, args.beam_size)
+                pred_ids = beam_decode(model, src_i, sos_id, eos_id, pad_id, args.max_len, args.beam_size,
+                                       args.no_repeat_ngram)
             else:
-                pred_ids = greedy_decode(model, src_i, sos_id, eos_id, pad_id, args.max_len)
+                pred_ids = greedy_decode(model, src_i, sos_id, eos_id, pad_id, args.max_len,
+                                         args.no_repeat_ngram)
 
             prediction = decode_indices(pred_ids, output_vocab)
 
@@ -347,18 +368,52 @@ def main():
         'checkpoint': str(args.checkpoint),
         'split': args.split,
         'beam_size': args.beam_size,
+        'no_repeat_ngram': args.no_repeat_ngram,
         'num_samples': len(all_predictions),
-        'metrics': scores
+        'metrics': scores,
+        'decoding_stats': {
+            'avg_pred_len': round(avg_pred_len, 2),
+            'avg_ref_len': round(avg_ref_len, 2),
+            'repetition_rate_pct': round(repeat_rate, 2),
+        }
     }
     with open(metrics_path, 'w', encoding='utf-8') as f:
         json.dump(metrics_output, f, indent=2, ensure_ascii=False)
     logger.info(f"\nSaved metrics to: {metrics_path}")
 
+    # --- Stats ---
+    pred_lens = [len(p.split()) for p in all_predictions]
+    ref_lens = [len(r.split()) for r in all_references]
+    avg_pred_len = sum(pred_lens) / len(pred_lens)
+    avg_ref_len = sum(ref_lens) / len(ref_lens)
+
+    def has_repetition(text: str, n: int = 3) -> bool:
+        words = text.split()
+        for i in range(len(words) - n):
+            ngram = tuple(words[i:i+n])
+            # Check if this n-gram repeats consecutively
+            if i + n * 2 <= len(words):
+                next_ngram = tuple(words[i+n:i+n*2])
+                if ngram == next_ngram:
+                    return True
+        return False
+
+    repeat_count = sum(1 for p in all_predictions if has_repetition(p))
+    repeat_rate = repeat_count / len(all_predictions) * 100
+
+    logger.info("\n--- DECODING STATS ---")
+    logger.info(f"  Avg prediction length (words): {avg_pred_len:.1f}")
+    logger.info(f"  Avg reference length (words):  {avg_ref_len:.1f}")
+    logger.info(f"  Repetition rate (3-gram):     {repeat_rate:.1f}% ({repeat_count}/{len(all_predictions)})")
+    logger.info(f"  no_repeat_ngram setting:       {args.no_repeat_ngram}")
+
     # Show sample predictions
     logger.info("\n--- Sample Predictions ---")
-    for i in range(min(5, len(all_predictions))):
+    for i in range(min(10, len(all_predictions))):
         logger.info(f"[{i}] REF: {all_references[i]}")
         logger.info(f"[{i}] PRED: {all_predictions[i]}")
+        rep_marker = " [REPEAT]" if has_repetition(all_predictions[i]) else ""
+        logger.info(f"[{i}] LEN: {len(all_predictions[i].split())} words{rep_marker}")
         logger.info("")
 
 
